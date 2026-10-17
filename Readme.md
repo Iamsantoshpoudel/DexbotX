@@ -179,36 +179,62 @@ BACKEND_URL=http://localhost:4000
 
 Open `http://localhost:3000`. The Next.js server reads `BACKEND_URL` for its `/api/*` rewrite; set it before starting or building the frontend.
 
-## Run backend services with Docker Compose
+## Production deployment (Vercel + Render)
 
-Docker Compose starts Redis, the backend API, the bot, the worker, and a one-shot database migration. It does not start the Next.js frontend.
+The production dashboard is hosted at `https://dexbotx.vercel.app` and the NestJS API at `https://dexbotx-zq8g.onrender.com`. The frontend proxies `/api/*` to the API, so browser requests and OAuth cookies remain on the Vercel domain.
 
-1. Create and configure `backend/.env` as described above. In Docker, Redis is provided by Compose, so Compose supplies the internal Redis URL to each backend service.
-2. Create a root `.env` with a strong Redis password:
+### Vercel
+
+1. Import the repository as a Vercel project and set **Root Directory** to `frontend`. Use the Next.js framework preset and the default build command (`npm run build`).
+2. Add these environment variables to the **Production** environment:
 
    ```dotenv
-   REDIS_PASSWORD=replace-with-a-long-random-value
+   BACKEND_URL=https://dexbotx-zq8g.onrender.com
+   NEXT_PUBLIC_SITE_URL=https://dexbotx.vercel.app
    ```
 
-3. From the repository root, build and start the services:
+   `BACKEND_URL` is used when Next.js builds its `/api/*` proxy rewrite. Redeploy after changing it. The production build defaults to the Render and Vercel URLs above if these variables are not set; local development continues to use localhost. Do not use the frontend Dockerfile for the Vercel deployment.
+3. Deploy the project and check `https://dexbotx.vercel.app`.
+
+### Render and Discord OAuth
+
+1. Configure the Render API service with the backend Dockerfile (`backend/Dockerfile`), set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`, and set the health check path to `/health/ready`. Configure the remaining backend variables from `backend/.env.example` using your production database, managed Redis, Discord credentials, and 64-character `SESSION_ENCRYPTION_KEY`. Render supplies `PORT`; the API listens on `0.0.0.0` and uses that port.
+2. Leave `COOKIE_DOMAIN` unset. The API response is proxied through Vercel, where the host-only secure cookie belongs to the dashboard domain.
+3. In the Discord Developer Portal, add this exact OAuth2 redirect URL:
+
+   ```text
+   https://dexbotx.vercel.app/api/auth/callback
+   ```
+
+   It must match `WEB_URL` plus `/api/auth/callback`. Run separate Render background workers using the same backend Docker image and environment: the bot command is `node dist/bot/manager.js`, and the queue worker command is `node dist/worker/worker.js`. Both need the same production `REDIS_URL`, database, Discord bot token, and encryption key as the API; without them, join/leave events will not be processed.
+4. Verify the Render API directly at `https://dexbotx-zq8g.onrender.com/health/ready` and through the dashboard proxy at `https://dexbotx.vercel.app/api/health/ready`. Both should report `status: "ok"`. Then test Discord login and a dashboard page.
+
+Do not put backend secrets in Vercel variables or `NEXT_PUBLIC_*` variables. Keep `DATABASE_URL`, `REDIS_URL`, Discord secrets, and the session key on the Render backend services only. Provide persistent, shared Redis and Postgres services for production; the Redis container and volume in Compose are for local use only.
+
+## Run the full stack with Docker Compose
+
+Docker Compose starts the Next.js dashboard, Redis, the backend API, the bot, the worker, and a one-shot database migration. Postgres remains external (for example, Supabase).
+
+1. Create and configure `backend/.env` as described above. Set `REDIS_PASSWORD` there to a strong random value. In Docker, Redis is provided by Compose, so Compose supplies the internal Redis URL to each backend service.
+2. From the repository root, pass the backend env file to Compose so it can read `REDIS_PASSWORD`:
 
    ```powershell
-   docker compose up -d --build
+   docker compose --env-file backend/.env up -d --build
    ```
 
-4. Inspect service status and logs:
+3. Inspect service status and logs:
 
    ```powershell
-   docker compose ps
-   docker compose logs -f api bot worker migrate
+   docker compose --env-file backend/.env ps
+   docker compose --env-file backend/.env logs -f frontend api bot worker migrate
    ```
 
-Run the frontend separately using the local instructions, setting its `BACKEND_URL` to the API address. In a deployed setup, configure the frontend build-time `BACKEND_URL` to reach the API from the Next.js server, and set backend `WEB_URL` to the public dashboard origin. The API should remain private behind the dashboard proxy or reverse proxy.
+Open `http://localhost:3000`. The dashboard proxies API requests over the internal Docker network, and the API is exposed only on loopback at `http://localhost:4000`. The standalone frontend image accepts build arguments `BACKEND_URL` and `NEXT_PUBLIC_SITE_URL`; Compose sets them for local use. For Vercel, configure the production environment variables in the deployment section below.
 
 To stop the Compose services:
 
 ```powershell
-docker compose down
+docker compose --env-file backend/.env down
 ```
 
 ## Request and event workflows

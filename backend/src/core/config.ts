@@ -10,7 +10,7 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   /** Public origin of the dashboard, e.g. https://dexbotx.app (no trailing slash needed). */
-  WEB_URL: z.string().min(1),
+  WEB_URL: z.string().url(),
   /** Number of reverse proxies in front of the API (see .env.example). */
   TRUST_PROXY: z.string().default('1'),
 
@@ -46,6 +46,17 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url().optional().or(z.literal('')),
   SUPABASE_SERVICE_KEY: z.string().min(20).optional().or(z.literal('')),
   SUPABASE_BUCKET: z.string().min(3).default('card-backgrounds'),
+}).superRefine((config, ctx) => {
+  if (config.NODE_ENV !== 'production') return;
+
+  const webUrl = new URL(config.WEB_URL);
+  if (webUrl.protocol !== 'https:' || ['localhost', '127.0.0.1', '::1'].includes(webUrl.hostname)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['WEB_URL'],
+      message: 'must be a public HTTPS dashboard URL in production',
+    });
+  }
 });
 
 export interface AppConfig {

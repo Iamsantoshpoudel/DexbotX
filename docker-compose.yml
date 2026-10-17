@@ -1,8 +1,7 @@
-# Backend stack: API + bot (sharded) + queue worker + Redis, with a one-shot migration job.
+# Full local stack: Next.js dashboard + API + bot + queue worker + Redis, with a one-shot migration job.
 # Postgres lives in Supabase, so there is no database container.
 #   cp backend/.env.example backend/.env   # fill it in
-#   export REDIS_PASSWORD=$(openssl rand -hex 16)
-#   docker compose up -d --build
+#   docker compose --env-file backend/.env up -d --build
 name: dexbotx
 
 x-backend: &backend
@@ -14,6 +13,22 @@ x-backend: &backend
       condition: service_healthy
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://api:4000
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    restart: unless-stopped
+    ports: ["127.0.0.1:3000:3000"]
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    depends_on:
+      api:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--maxmemory-policy", "noeviction"]
@@ -33,13 +48,15 @@ services:
     restart: "no"
     healthcheck: { disable: true }
     environment:
+      NODE_ENV: production
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
 
   api:
     <<: *backend
-    # Loopback only: in production the dashboard proxies /api/* here, and Prometheus scrapes /metrics from the host.
+    # Expose locally only; the dashboard uses the internal Compose network.
     ports: ["127.0.0.1:4000:4000"]
     environment:
+      NODE_ENV: production
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       redis: { condition: service_healthy }
@@ -50,6 +67,7 @@ services:
     command: ["node", "dist/bot/manager.js"]
     healthcheck: { disable: true }
     environment:
+      NODE_ENV: production
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       redis: { condition: service_healthy }
@@ -62,6 +80,7 @@ services:
     healthcheck: { disable: true }
     stop_grace_period: 30s # lets in-flight jobs finish on deploy
     environment:
+      NODE_ENV: production
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       redis: { condition: service_healthy }

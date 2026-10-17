@@ -5,8 +5,19 @@
  *  - the backend can stay on a private network
  * BACKEND_URL is read at BUILD time (rewrites are baked into the standalone output).
  */
-const BACKEND_URL = (process.env.BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
 const isDev = process.env.NODE_ENV !== 'production';
+const BACKEND_URL = (process.env.BACKEND_URL ?? (
+  isDev ? 'http://localhost:4000' : 'https://dexbotx-zq8g.onrender.com'
+)).replace(/\/+$/, '');
+const backendUrl = new URL(BACKEND_URL);
+
+if (!['http:', 'https:'].includes(backendUrl.protocol) || backendUrl.username || backendUrl.password) {
+  throw new Error('BACKEND_URL must be an HTTP(S) URL without embedded credentials');
+}
+const isComposeBackend = backendUrl.hostname === 'api' && backendUrl.port === '4000';
+if (!isDev && backendUrl.protocol !== 'https:' && !isComposeBackend) {
+  throw new Error('BACKEND_URL must use HTTPS in production');
+}
 
 const csp = [
   "default-src 'self'",

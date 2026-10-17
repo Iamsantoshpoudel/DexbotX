@@ -5,7 +5,9 @@ import type { ReactNode } from 'react';
 import { Providers } from '@/components/providers';
 import './globals.css';
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? (
+  process.env.NODE_ENV === 'production' ? 'https://dexbotx.vercel.app' : 'http://localhost:3000'
+);
 const DESCRIPTION = 'A public Discord bot that greets new members with custom image cards. Configure welcome and goodbye messages from a clean dashboard.';
 
 export const metadata: Metadata = {

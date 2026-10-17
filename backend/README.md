@@ -28,7 +28,7 @@ npm run start:bot:dev         # bot, in a second terminal
 npm run start:worker:dev      # queue worker, in a third terminal
 ```
 
-Or with Docker (API + bot + worker + Redis + one-shot migration): `docker compose up -d --build` from the repo root.
+Or with Docker (API + bot + worker + Redis + one-shot migration): set `REDIS_PASSWORD` in `backend/.env`, then run `docker compose --env-file backend/.env up -d --build` from the repo root.
 
 ### Discord Developer Portal
 1. Create an application; copy **Client ID**, **Client Secret** and the **Bot token** into `.env`.
@@ -45,6 +45,17 @@ Or with Docker (API + bot + worker + Redis + one-shot migration): `docker compos
 
 ## Environment
 See `.env.example`. Required: `WEB_URL`, `DATABASE_URL`, `REDIS_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `SESSION_ENCRYPTION_KEY` (`openssl rand -hex 32`). Invalid config stops the process at boot with a readable list of problems.
+
+## Production on Render
+
+For the production dashboard at `https://dexbotx.vercel.app` and API at `https://dexbotx-zq8g.onrender.com`:
+
+- Configure the Render API service to build from `backend/Dockerfile`; set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`. A production HTTP or localhost `WEB_URL` is rejected at startup. Set Render's health check path to `/health/ready`.
+- Set production `DATABASE_URL`, managed `REDIS_URL`, Discord credentials, and `SESSION_ENCRYPTION_KEY` in Render's environment. Keep `COOKIE_DOMAIN` unset so the secure host-only cookie is returned through Vercel's same-origin API proxy.
+- Create separate Render background workers from the same Dockerfile/image. Use `node dist/bot/manager.js` for the bot and `node dist/worker/worker.js` for the queue worker. Configure both with the same database, Redis, and Discord environment as the API.
+- Register `https://dexbotx.vercel.app/api/auth/callback` in Discord Developer Portal → OAuth2 → Redirects. This exact URL is derived from `WEB_URL`.
+
+After deployment, `/auth/login` should redirect to Discord with that callback URL. Check `/health/ready` on the Render API and `/api/health/ready` through Vercel.
 
 ## API (all JSON, session cookie required unless noted)
 | Method | Path | Notes |
