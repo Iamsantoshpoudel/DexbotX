@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+
+  --color-background: #090912;
+  --color-foreground: #ececf6;
+  --color-card: #11111d;
+  --color-border: #25253a;
+  --color-border-strong: #363653;
+  --color-switch: #2c2c44;
+  --color-input: #181826;
+  --color-muted: #181826;
+  --color-muted-foreground: #9898b3;
+  --color-primary: #7c6cff;
+  --color-primary-foreground: #0b0b16;
+  --color-destructive: #f4616f;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-ring: #7c6cff;
+}
+
+html {
+  color-scheme: dark;
+}
+
+/* Light theme: same token names, so every utility (bg-card, text-muted-foreground, ...) switches automatically.
+   All foreground/background pairs here are checked for WCAG AA (4.5:1) contrast. */
+html.light {
+  color-scheme: light;
+  --color-background: #f6f6fb;
+  --color-foreground: #14141f;
+  --color-card: #ffffff;
+  --color-border: #dcdce8;
+  --color-border-strong: #bdbdd2;
+  --color-switch: #c9c9dc;
+  --color-input: #ffffff;
+  --color-muted: #eeeef6;
+  --color-muted-foreground: #5a5a74;
+  --color-primary: #4a3ae6;
+  --color-primary-foreground: #ffffff;
+  --color-destructive: #b81f30;
+  --color-success: #086b49;
+  --color-warning: #8f5500;
+  --color-ring: #4a3ae6;
+}
+
+html.light body {
+  background-image:
+    radial-gradient(900px 480px at 12% -8%, rgb(74 58 230 / 0.09), transparent 60%),
+    radial-gradient(700px 420px at 100% 0%, rgb(14 165 233 / 0.07), transparent 60%);
+}
+
+body {
+  background-color: var(--color-background);
+  background-image:
+    radial-gradient(900px 480px at 12% -8%, rgb(124 108 255 / 0.16), transparent 60%),
+    radial-gradient(700px 420px at 100% 0%, rgb(34 211 238 / 0.08), transparent 60%);
+  background-repeat: no-repeat;
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgb(124 108 255 / 0.4);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  /* `backwards`, not `both`: a lingering transform animation would make this element the containing block for
+     `position: fixed` descendants (the editor's save bar would scroll with the page instead of staying on screen). */
+  animation: fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up {
+    animation: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,51 @@
+/**
+ * The browser only ever talks to THIS origin. /api/* is proxied to the NestJS backend, so:
+ *  - the session cookie is first-party (SameSite=Lax, httpOnly) and never exposed to other origins
+ *  - there is no CORS surface to get wrong
+ *  - the backend can stay on a private network
+ * BACKEND_URL is read at BUILD time (rewrites are baked into the standalone output).
+ */
+const BACKEND_URL = (process.env.BACKEND_URL ?? 'http://localhost:4000').replace(/\/+$/, '');
+const isDev = process.env.NODE_ENV !== 'production';
+
+const csp = [
+  "default-src 'self'",
+  // Next.js injects inline bootstrap scripts; a nonce-based CSP would force every page to render dynamically.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https://cdn.discordapp.com",
+  "font-src 'self' data:",
+  `connect-src 'self'${isDev ? ' ws:' : ''}`,
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const securityHeaders = [
+  { key: 'Content-Security-Policy', value: csp },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+];
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  output: 'standalone',
+  poweredByHeader: false,
+  reactStrictMode: true,
+  async rewrites() {
+    return [{ source: '/api/:path*', destination: `${BACKEND_URL}/:path*` }];
+  },
+  async headers() {
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // Never let a CDN or browser cache API responses (they are per-user).
+      { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
+    ];
+  },
+};
+
+export default nextConfig;

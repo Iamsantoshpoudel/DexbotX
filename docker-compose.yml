@@ -1,0 +1,71 @@
+# Backend stack: API + bot (sharded) + queue worker + Redis, with a one-shot migration job.
+# Postgres lives in Supabase, so there is no database container.
+#   cp backend/.env.example backend/.env   # fill it in
+#   export REDIS_PASSWORD=$(openssl rand -hex 16)
+#   docker compose up -d --build
+name: dexbotx
+
+x-backend: &backend
+  build: ./backend
+  env_file: ./backend/.env
+  restart: unless-stopped
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD}", "--maxmemory-policy", "noeviction"]
+    volumes: ["redis-data:/data"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+  migrate:
+    <<: *backend
+    command: ["node", "dist/db/migrate.js"]
+    restart: "no"
+    healthcheck: { disable: true }
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+
+  api:
+    <<: *backend
+    # Loopback only: in production the dashboard proxies /api/* here, and Prometheus scrapes /metrics from the host.
+    ports: ["127.0.0.1:4000:4000"]
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  bot:
+    <<: *backend
+    command: ["node", "dist/bot/manager.js"]
+    healthcheck: { disable: true }
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+  # Renders welcome cards and posts them. Stateless: `docker compose up -d --scale worker=3` to add capacity.
+  worker:
+    <<: *backend
+    command: ["node", "dist/worker/worker.js"]
+    healthcheck: { disable: true }
+    stop_grace_period: 30s # lets in-flight jobs finish on deploy
+    environment:
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+    depends_on:
+      redis: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  redis-data:
