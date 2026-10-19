@@ -58,6 +58,7 @@ export interface GuildDetail {
   iconUrl: string | null;
   bannerUrl: string | null;
   memberCount: number;
+  lastSyncedAt: string | null;
 }
 
 export interface GuildSettings {
@@ -69,6 +70,20 @@ export interface Channel {
   id: string;
   name: string;
   category: string | null;
+}
+
+export interface GuildRole {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+}
+
+export interface GuildRefreshResult {
+  guild: { id: string; name: string; icon: string | null; ownerId: string | null; memberCount: number };
+  channels: Channel[];
+  roles: GuildRole[];
+  lastSyncedAt: string;
 }
 
 export interface Preset {

@@ -66,6 +66,7 @@ export interface AppConfig {
   logLevel: string;
   webOrigin: string;
   redirectUri: string;
+  inviteRedirectUri: string;
   cookieSecure: boolean;
   cookieDomain?: string;
   trustProxy: boolean | number | string;
@@ -112,6 +113,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: e.LOG_LEVEL,
     webOrigin,
     redirectUri: `${webOrigin}/api/auth/callback`,
+    inviteRedirectUri: `${webOrigin}/api/bot/added`,
     cookieSecure: isProd || webOrigin.startsWith('https://'),
     cookieDomain: e.COOKIE_DOMAIN || undefined,
     trustProxy: parseTrustProxy(e.TRUST_PROXY),

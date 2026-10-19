@@ -7,7 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 const SESSION_COOKIES = ['__Host-dexbotx_sid', 'dexbotx_sid'];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   if (SESSION_COOKIES.some((name) => req.cookies.has(name))) return NextResponse.next();
   const url = req.nextUrl.clone();
   url.pathname = '/api/auth/login';

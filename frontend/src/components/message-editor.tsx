@@ -17,13 +17,15 @@ import { Switch } from '@/components/ui/switch';
 import { errorBody, errorMessage, isRateLimited, issuesByPath } from '@/lib/errors';
 import { FIELD_IDS, validateMessage } from '@/lib/message-schema';
 import type { PlaceholderContext } from '@/lib/placeholders';
-import type { MessageKind, Preset } from '@/lib/types';
+import { readChannelsCache, writeChannelsCache } from '@/lib/server-cache';
+import type { Channel, MessageKind, Preset } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import {
   useGetChannelsQuery,
   useGetGuildQuery,
   useGetMeQuery,
   useGetPresetsQuery,
+  useResetMessageMutation,
   useSaveMessageMutation,
   useSendTestMutation,
 } from '@/store/api';
@@ -72,10 +74,27 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   const { data: channels } = useGetChannelsQuery(guildId);
   const { data: presets } = useGetPresetsQuery();
   const { data: me } = useGetMeQuery();
+  const [cachedChannels, setCachedChannels] = useState<{ key: string; value: Channel[] } | null>(null);
+  const channelCacheKey = me ? `${me.id}:${guildId}` : '';
+
+  useEffect(() => {
+    if (!me) return;
+    const cached = readChannelsCache(me.id, guildId);
+    setCachedChannels(cached ? { key: channelCacheKey, value: cached } : null);
+  }, [channelCacheKey, guildId, me]);
+
+  useEffect(() => {
+    if (!me || !channels) return;
+    writeChannelsCache(me.id, guildId, channels);
+    setCachedChannels({ key: channelCacheKey, value: channels });
+  }, [channelCacheKey, channels, guildId, me]);
+
+  const visibleChannels = channels ?? (cachedChannels?.key === channelCacheKey ? cachedChannels.value : undefined);
 
   const draft = useAppSelector((s) => (s.editor.key === key ? s.editor.draft : null));
   const dirty = useAppSelector((s) => s.editor.key === key && isDirty(s.editor));
   const [save, { isLoading: saving }] = useSaveMessageMutation();
+  const [reset, { isLoading: resetting }] = useResetMessageMutation();
   const [sendTest, { isLoading: testing }] = useSendTestMutation();
   const [issues, setIssues] = useState<Record<string, string>>({});
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -125,10 +144,10 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   }
 
   const copy = COPY[kind];
-  const channel = channels?.find((c) => c.id === draft.channelId) ?? null;
-  const savedChannelMissing = !!channels && !!draft.channelId && !channel;
+  const channel = visibleChannels?.find((c) => c.id === draft.channelId) ?? null;
+  const savedChannelMissing = !!visibleChannels && !!draft.channelId && !channel;
   const grouped = Object.entries(
-    (channels ?? []).reduce<Record<string, typeof channels>>((acc, c) => {
+    (visibleChannels ?? []).reduce<Record<string, Channel[]>>((acc, c) => {
       const k = c.category ?? 'No category';
       (acc[k] ??= []).push(c);
       return acc;
@@ -186,11 +205,23 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   async function onTest() {
     try {
       const res = await sendTest({ guildId, kind }).unwrap();
-      const name = channels?.find((c) => c.id === res.channelId)?.name;
+      const name = visibleChannels?.find((c) => c.id === res.channelId)?.name;
       toast.success(name ? `Test message sent to #${name}` : 'Test message sent');
     } catch (e) {
       if (isRateLimited(e)) return;
       toast.error(errorMessage(e, 'Could not send the test message.'));
+    }
+  }
+
+  async function onReset() {
+    if (!window.confirm(`Reset the saved ${kind} message to its defaults? Unsaved edits will be discarded.`)) return;
+    try {
+      const config = await reset({ guildId, kind }).unwrap();
+      dispatch(markSaved(config));
+      toast.success(`${copy.title} reset to defaults`);
+    } catch (e) {
+      if (isRateLimited(e)) return;
+      toast.error(errorMessage(e, 'Could not reset this message.'));
     }
   }
 
@@ -209,6 +240,9 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
               <p className="mt-0.5 text-sm text-muted-foreground">{copy.blurb}</p>
             </div>
             <div className="flex items-center gap-3">
+              <Button type="button" variant="ghost" size="sm" onClick={onReset} disabled={resetting || saving}>
+                <RotateCcw /> {resetting ? 'Resetting…' : 'Reset'}
+              </Button>
               <Badge tone={draft.enabled ? 'success' : 'neutral'}>{draft.enabled ? 'On' : 'Off'}</Badge>
               <Switch aria-label={`Enable ${kind} message`} checked={draft.enabled} onCheckedChange={(enabled) => dispatch(patch({ enabled }))} />
             </div>
@@ -217,7 +251,7 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
           <div className="mt-5">
             <Field label="Channel" htmlFor="channel" error={err('channelId')} hint="Where DexbotX posts this message.">
               <Select id="channel" value={draft.channelId ?? ''} {...a11y('channelId', 'channel')} onChange={(e) => dispatch(patch({ channelId: e.target.value || null }))}>
-                <option value="">{channels ? 'Select a channel…' : 'Loading channels…'}</option>
+                <option value="">{visibleChannels ? 'Select a channel…' : 'Loading channels…'}</option>
                 {grouped.map(([category, list]) => (
                   <optgroup key={category} label={category}>
                     {list!.map((c) => (
@@ -342,7 +376,7 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-20 flex justify-center px-4" aria-live="polite">
         <div className={cn('pointer-events-auto flex items-center gap-3 rounded-2xl border border-border bg-card/95 px-4 py-2.5 shadow-2xl backdrop-blur transition-all', dirty ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0')}>
           <span className="text-sm">Unsaved changes</span>
-          <Button variant="ghost" size="sm" onClick={() => dispatch(discard())} disabled={saving}>
+          <Button variant="ghost" size="sm" onClick={() => dispatch(discard())} disabled={saving || resetting}>
             <RotateCcw /> Discard
           </Button>
           <Button size="sm" onClick={onSave} disabled={saving || hasProblems}>

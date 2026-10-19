@@ -9,6 +9,8 @@ DexBotX is a Discord bot and web dashboard for configuring welcome and goodbye m
 - Upload optional custom card backgrounds to private Supabase Storage.
 - Send a test message to check the saved configuration and channel permissions.
 - Manage settings through a same-origin Next.js dashboard backed by a NestJS API.
+- Update bot-installed server status in an open dashboard when the bot joins or leaves, without periodic guild-list polling.
+- Cache server/channel display metadata per signed-in Discord user in local storage for faster dashboard reloads; the API still refreshes and validates it, while message settings remain server-authoritative.
 - Process join/leave events through a Redis-backed queue so image rendering and posting do not block the Discord gateway.
 
 ## How it works: browser to Discord channel
@@ -68,8 +70,8 @@ The user's OAuth session and the bot token are separate credentials: OAuth is fo
 
 | Component | Purpose |
 |---|---|
-| `frontend/` | Next.js dashboard and static/public pages |
-| `backend/` API | NestJS HTTP API, OAuth callback, validation, authorization, and health endpoints |
+| `frontend/` | Next.js dashboard and static/public pages; listens for server membership events to refresh the active server list |
+| `backend/` API | NestJS HTTP API, OAuth callback, validation, authorization, health endpoints, and authenticated server event stream |
 | `backend/` bot | Discord Gateway client and shard manager; enqueues member events |
 | `backend/` worker | Consumes jobs, renders welcome/goodbye cards, and posts to Discord |
 | Supabase Postgres | Guild metadata, message settings, and audit logs |
@@ -198,7 +200,7 @@ The production dashboard is hosted at `https://dexbotx.vercel.app` and the NestJ
 
 ### Render and Discord OAuth
 
-1. Configure the Render API service with the backend Dockerfile (`backend/Dockerfile`), set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`, and set the health check path to `/health/ready`. Configure the remaining backend variables from `backend/.env.example` using your production database, managed Redis, Discord credentials, and 64-character `SESSION_ENCRYPTION_KEY`. Render supplies `PORT`; the API listens on `0.0.0.0` and uses that port.
+1. Configure the Render API service to use the **Node** runtime with **Root Directory** `backend`, **Build Command** `npm ci && npm run build`, and **Start Command** `npm run start`. Set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`, and set the health check path to `/health/ready`. Configure the remaining backend variables from `backend/.env.example` using your production database, managed Redis, Discord credentials, and 64-character `SESSION_ENCRYPTION_KEY`. Render supplies `PORT`; the API listens on `0.0.0.0` and uses that port.
 2. Leave `COOKIE_DOMAIN` unset. The API response is proxied through Vercel, where the host-only secure cookie belongs to the dashboard domain.
 3. In the Discord Developer Portal, add this exact OAuth2 redirect URL:
 
@@ -206,7 +208,7 @@ The production dashboard is hosted at `https://dexbotx.vercel.app` and the NestJ
    https://dexbotx.vercel.app/api/auth/callback
    ```
 
-   It must match `WEB_URL` plus `/api/auth/callback`. Run separate Render background workers using the same backend Docker image and environment: the bot command is `node dist/bot/manager.js`, and the queue worker command is `node dist/worker/worker.js`. Both need the same production `REDIS_URL`, database, Discord bot token, and encryption key as the API; without them, join/leave events will not be processed.
+   It must match `WEB_URL` plus `/api/auth/callback`. Run separate Render background workers using the same Node runtime and `backend` root directory. Set each worker's build command to `npm ci && npm run build`; use `npm run start:bot` for the bot and `npm run start:worker` for the queue worker. Both need the same production `REDIS_URL`, database, Discord bot token, and encryption key as the API; without them, join/leave events will not be processed.
 4. Verify the Render API directly at `https://dexbotx-zq8g.onrender.com/health/ready` and through the dashboard proxy at `https://dexbotx.vercel.app/api/health/ready`. Both should report `status: "ok"`. Then test Discord login and a dashboard page.
 
 Do not put backend secrets in Vercel variables or `NEXT_PUBLIC_*` variables. Keep `DATABASE_URL`, `REDIS_URL`, Discord secrets, and the session key on the Render backend services only. Provide persistent, shared Redis and Postgres services for production; the Redis container and volume in Compose are for local use only.

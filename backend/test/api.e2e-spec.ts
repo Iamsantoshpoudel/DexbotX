@@ -17,7 +17,7 @@ import { configureApp } from '../src/app.setup';
 import { BotModule } from '../src/bot/bot.module';
 import { BotService } from '../src/bot/bot.service';
 import { DatabaseService } from '../src/db/database.service';
-import { auditLogs, guilds } from '../src/db/schema';
+import { auditLogs, guildChannels, guildRoles, guilds } from '../src/db/schema';
 import { SettingsCache } from '../src/redis/settings-cache.service';
 import { MemberEventsQueue } from '../src/queue/member-events.queue';
 import { WorkerModule } from '../src/worker/worker.module';
@@ -213,6 +213,15 @@ beforeAll(async () => {
   await db.insert(guilds).values([
     { id: G1, name: 'Alpha Guild', memberCount: 120, bannerHash: null },
     { id: G2, name: 'Bravo Guild', memberCount: 10 },
+  ]);
+  await db.insert(guildChannels).values([
+    { guildId: G1, id: '555555555555555550', type: 4, name: 'Info', parentId: null, position: 0 },
+    { guildId: G1, id: C1, type: 0, name: 'welcome', parentId: '555555555555555550', position: 1 },
+    { guildId: G1, id: '555555555555555552', type: 2, name: 'voice', parentId: null, position: 2 },
+    { guildId: G1, id: '555555555555555553', type: 5, name: 'news', parentId: null, position: 3 },
+  ]);
+  await db.insert(guildRoles).values([
+    { guildId: G1, id: '555555555555555554', name: 'member', color: 0, position: 1 },
   ]);
 
   // --- Bot (a separate Nest context, like a shard process). Not initialised, so it never logs in to Discord. ---
@@ -479,6 +488,18 @@ describe('DexBotX API', () => {
     expect(storageObjects.has(uploadedPath)).toBe(false);
   });
 
+  it('resets only the selected message kind and records the reset atomically', async () => {
+    const res = await http().delete(`/guilds/${G1}/messages/goodbye`).set(authed()).expect(200);
+    expect(res.body.config.enabled).toBe(false);
+
+    const detail = await http().get(`/guilds/${G1}`).set(authed()).expect(200);
+    expect(detail.body.settings.goodbye.enabled).toBe(false);
+    expect(detail.body.settings.welcome.content).toBe('Updated text {user}');
+
+    const audit = await app.get(DatabaseService).db.select().from(auditLogs).where(eq(auditLogs.guildId, G1));
+    expect(audit.some((entry) => entry.action === 'goodbye.reset' && entry.userId === USER_ID)).toBe(true);
+  });
+
   it('exposes Prometheus metrics only with the bearer token, using route templates', async () => {
     await http().get('/metrics').expect(401);
     await http().get('/metrics').set('Authorization', 'Bearer wrong-token-wrong-token').expect(401);
@@ -493,10 +514,13 @@ describe('DexBotX API', () => {
 
   it('has Row Level Security enabled on every table', async () => {
     const db = app.get(DatabaseService).db;
-    const rows = (await db.execute(sql`select relname, relrowsecurity from pg_class where relname in ('guilds','guild_settings','audit_logs') order by relname`)) as unknown as Array<{ relname: string; relrowsecurity: boolean }>;
+    const rows = (await db.execute(sql`select relname, relrowsecurity from pg_class where relname in ('guilds','guild_settings','guild_channels','guild_roles','guild_templates','audit_logs') order by relname`)) as unknown as Array<{ relname: string; relrowsecurity: boolean }>;
     expect(rows.map((r) => [r.relname, r.relrowsecurity])).toEqual([
       ['audit_logs', true],
+      ['guild_channels', true],
+      ['guild_roles', true],
       ['guild_settings', true],
+      ['guild_templates', true],
       ['guilds', true],
     ]);
   });

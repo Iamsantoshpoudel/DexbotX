@@ -48,6 +48,22 @@ export interface DiscordChannel {
   parent_id: string | null;
 }
 
+export interface DiscordGuild {
+  id: string;
+  name: string;
+  icon: string | null;
+  banner?: string | null;
+  approximate_member_count?: number;
+  owner_id?: string;
+}
+
+export interface DiscordRole {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+}
+
 @Injectable()
 export class DiscordRestService {
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
@@ -131,6 +147,15 @@ export class DiscordRestService {
 
   getGuildChannels(guildId: string): Promise<DiscordChannel[]> {
     return this.request<DiscordChannel[]>(`/guilds/${guildId}/channels`, { headers: this.bot() });
+  }
+
+  getGuildRoles(guildId: string): Promise<DiscordRole[]> {
+    return this.request<DiscordRole[]>(`/guilds/${guildId}/roles`, { headers: this.bot() });
+  }
+
+  /** Succeeds only if the bot is in the guild; Discord returns 404/403 otherwise. */
+  getGuildAsBot(guildId: string): Promise<DiscordGuild> {
+    return this.request<DiscordGuild>(`/guilds/${guildId}?with_counts=true`, { headers: this.bot() });
   }
 
   async createMessage(channelId: string, message: BuiltMessage, mentionUserIds: string[]): Promise<void> {

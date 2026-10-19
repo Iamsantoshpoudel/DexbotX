@@ -23,6 +23,7 @@ cp .env.example .env          # fill it in (see below)
 npm install
 npm run db:generate           # only after changing src/db/schema.ts
 npm run build && npm run db:migrate
+npm run db:backfill-guild-data # optional once after deploying guild-data migration
 npm run start:dev             # API on :4000
 npm run start:bot:dev         # bot, in a second terminal
 npm run start:worker:dev      # queue worker, in a third terminal
@@ -39,6 +40,7 @@ Or with Docker (API + bot + worker + Redis + one-shot migration): set `REDIS_PAS
 ### Supabase
 - `DATABASE_URL`: the **session pooler** string (port 5432) or the direct connection. Do not use the transaction pooler (6543) for these long-running servers.
 - Run `npm run db:migrate` once per deploy.
+- Migration `0001_guild_data` renames the guild key/flags to `guild_id` and `bot_present`, adds guild-scoped channel, role, and template tables plus `last_synced_at`, preserves existing rows, and removes the cascading-delete behavior. Existing Redis/API-only channel data has no durable SQL source, so run `npm run db:backfill-guild-data` after migration (or let bot startup/periodic sync populate active guilds).
 - Row Level Security is already enabled on every table by the migration (no policies), so Supabase's public REST API cannot read or write your data. Only this backend, connecting as the database owner, can. An e2e test fails if a table is added without RLS.
 - Custom card backgrounds (optional): set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (service role, server-side only). The backend creates a **private** bucket on first upload; without these variables uploads are disabled.
 - Use a paid project in production: free projects pause when idle, which would take the bot offline.
@@ -50,9 +52,9 @@ See `.env.example`. Required: `WEB_URL`, `DATABASE_URL`, `REDIS_URL`, `DISCORD_C
 
 For the production dashboard at `https://dexbotx.vercel.app` and API at `https://dexbotx-zq8g.onrender.com`:
 
-- Configure the Render API service to build from `backend/Dockerfile`; set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`. A production HTTP or localhost `WEB_URL` is rejected at startup. Set Render's health check path to `/health/ready`.
+- Configure the Render API service with the Node runtime and root directory `backend`; use `npm ci && npm run build` as its build command and `npm run start` as its start command. Set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`. A production HTTP or localhost `WEB_URL` is rejected at startup. Set Render's health check path to `/health/ready`.
 - Set production `DATABASE_URL`, managed `REDIS_URL`, Discord credentials, and `SESSION_ENCRYPTION_KEY` in Render's environment. Keep `COOKIE_DOMAIN` unset so the secure host-only cookie is returned through Vercel's same-origin API proxy.
-- Create separate Render background workers from the same Dockerfile/image. Use `node dist/bot/manager.js` for the bot and `node dist/worker/worker.js` for the queue worker. Configure both with the same database, Redis, and Discord environment as the API.
+- Create separate Render background workers using the Node runtime and root directory `backend`. Use `npm ci && npm run build` as each build command, then `npm run start:bot` for the bot and `npm run start:worker` for the queue worker. Configure both with the same database, Redis, and Discord environment as the API.
 - Register `https://dexbotx.vercel.app/api/auth/callback` in Discord Developer Portal → OAuth2 → Redirects. This exact URL is derived from `WEB_URL`.
 
 After deployment, `/auth/login` should redirect to Discord with that callback URL. Check `/health/ready` on the Render API and `/api/health/ready` through Vercel.
@@ -66,7 +68,11 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 | GET | `/guilds` | servers the user can manage; includes an invite URL where the bot is missing |
 | GET | `/guilds/:guildId` | server details plus welcome and goodbye config |
 | GET | `/guilds/:guildId/channels` | text and announcement channels, grouped by category |
+| GET | `/guilds/:guildId/roles` | guild-scoped roles for dashboard selectors |
+| POST | `/guilds/:guildId/refresh` | full Discord sync; Manage Server required; 30-second per-guild cooldown |
+| GET | `/events/guilds` | authenticated server-sent events when the bot joins or leaves a server |
 | PUT | `/guilds/:guildId/messages/:kind` | save config, `kind` = `welcome` or `goodbye` |
+| DELETE | `/guilds/:guildId/messages/:kind` | reset only that message kind to defaults; settings and audit record commit atomically |
 | POST | `/guilds/:guildId/messages/:kind/preview` | renders a real PNG using the user's avatar |
 | POST | `/guilds/:guildId/assets/background` | multipart field `file`; validated and re-encoded to JPEG (2 MB cap, decompression-bomb safe), stored privately; returns a `path` for `image.backgroundPath` |
 | POST | `/guilds/:guildId/messages/:kind/test` | posts a test message; explains missing channel permissions instead of failing silently |
@@ -79,6 +85,9 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 - **Authorization:** every `/guilds/:guildId/*` route re-checks server side that the user has Manage Server (or owns the server) and that the bot is installed. Guild ids from the client are never trusted.
 - **CSRF:** state-changing requests must carry the dashboard `Origin`/`Referer`; anything else is rejected.
 - **Rate limits:** Redis sliding counters per user (per IP when anonymous), stricter on login, preview and test sends.
+- **Live server list:** bot join/leave events are published through Redis Pub/Sub and delivered over the authenticated `/events/guilds` stream; the dashboard refreshes the active guild list only when membership changes, without periodic polling.
+- **Settings writes:** the settings upsert and audit-log entry are one Postgres transaction; `DELETE /guilds/:guildId/messages/:kind` resets only that message type to defaults. Redis caches are invalidated after the transaction commits.
+- **Client metadata cache:** the frontend persists only validated server/channel display metadata in user-scoped local storage for up to seven days. It still fetches the API on entry/refresh, and bot membership/channel events invalidate the active query. Message settings are never persisted in browser storage.
 - **Output safety:** user-controlled names are markdown-escaped, `@everyone`/`@here` are defused, and bot messages use restricted `allowed_mentions`. The bot never posts to a channel that is not in the member's own server.
 - **Transport:** Helmet headers, request body limit of 32 KB, strict zod validation (unknown keys rejected), Sentry for errors, pino logs.
 

@@ -72,26 +72,66 @@ export class WelcomeService {
     const before = await this.cache.get(guild.id);
     const other = kind === 'welcome' ? 'goodbye' : 'welcome';
     const now = new Date();
-    await this.database.db
-      .insert(guildSettings)
-      .values({
-        guildId: guild.id,
-        [kind]: config,
-        [other]: defaultMessageConfig(other),
-        updatedBy: session.userId,
-        updatedAt: now,
-      } as typeof guildSettings.$inferInsert)
-      .onConflictDoUpdate({
-        target: guildSettings.guildId,
-        set: { [kind]: config, updatedBy: session.userId, updatedAt: now },
-      });
-    await this.database.db.insert(auditLogs).values({ guildId: guild.id, userId: session.userId, action: `${kind}.update` });
+    await this.database.db.transaction(async (tx) => {
+      await tx
+        .insert(guildSettings)
+        .values({
+          guildId: guild.id,
+          [kind]: config,
+          [other]: defaultMessageConfig(other),
+          updatedBy: session.userId,
+          updatedAt: now,
+        } as typeof guildSettings.$inferInsert)
+        .onConflictDoUpdate({
+          target: guildSettings.guildId,
+          set: { [kind]: config, updatedBy: session.userId, updatedAt: now },
+        });
+      await tx.insert(auditLogs).values({ guildId: guild.id, userId: session.userId, action: `${kind}.update` });
+    });
     await this.cache.invalidate(guild.id);
 
-    // Delete the replaced upload unless the other message still uses it.
-    const old = before[kind].image.backgroundPath;
-    if (old && old !== config.image.backgroundPath && old !== before[other].image.backgroundPath) await this.storage.remove(old);
+    await this.removeReplacedBackground(before, kind, config);
     return config;
+  }
+
+  async reset(guild: GuildRow, session: SessionData, kind: MessageKind): Promise<MessageConfig> {
+    const before = await this.cache.get(guild.id);
+    const other = kind === 'welcome' ? 'goodbye' : 'welcome';
+    const config = defaultMessageConfig(kind);
+    const now = new Date();
+
+    await this.database.db.transaction(async (tx) => {
+      await tx
+        .insert(guildSettings)
+        .values({
+          guildId: guild.id,
+          [kind]: config,
+          [other]: before[other],
+          updatedBy: session.userId,
+          updatedAt: now,
+        } as typeof guildSettings.$inferInsert)
+        .onConflictDoUpdate({
+          target: guildSettings.guildId,
+          set: { [kind]: config, updatedBy: session.userId, updatedAt: now },
+        });
+      await tx.insert(auditLogs).values({ guildId: guild.id, userId: session.userId, action: `${kind}.reset` });
+    });
+    await this.cache.invalidate(guild.id);
+
+    await this.removeReplacedBackground(before, kind, config);
+    return config;
+  }
+
+  private async removeReplacedBackground(
+    before: Awaited<ReturnType<SettingsCache['get']>>,
+    kind: MessageKind,
+    config: MessageConfig,
+  ): Promise<void> {
+    const other = kind === 'welcome' ? 'goodbye' : 'welcome';
+    const oldPath = before[kind].image.backgroundPath;
+    if (oldPath && oldPath !== config.image.backgroundPath && oldPath !== before[other].image.backgroundPath) {
+      await this.storage.remove(oldPath);
+    }
   }
 
   async preview(guild: GuildRow, session: SessionData, config: MessageConfig): Promise<Buffer> {

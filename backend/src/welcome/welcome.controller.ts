@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Param, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, HttpCode, Param, Post, Put, Req, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { CurrentSession, RateLimit } from '../common/decorators';
 import type { AuthedRequest, SessionData } from '../common/types';
@@ -21,6 +21,16 @@ export class WelcomeController {
     @Req() req: AuthedRequest,
   ) {
     return { config: await this.welcome.save(req.guild!, session, kind, body) };
+  }
+
+  @Delete(':kind')
+  @RateLimit('messages-reset', 10)
+  async reset(
+    @Param('kind', new ParseKindPipe()) kind: MessageKind,
+    @CurrentSession() session: SessionData,
+    @Req() req: AuthedRequest,
+  ) {
+    return { config: await this.welcome.reset(req.guild!, session, kind) };
   }
 
   /** Renders the real card with the logged-in user's avatar, so the dashboard preview matches what the bot posts. */

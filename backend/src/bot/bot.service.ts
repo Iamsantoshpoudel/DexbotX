@@ -5,6 +5,7 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  Guild,
   GuildMember,
   Options,
   PartialGuildMember,
@@ -25,6 +26,7 @@ const MAX_POSTS_PER_MINUTE = 20;
 export class BotService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(BotService.name);
   readonly client: Client;
+  private syncTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -55,12 +57,42 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   async onApplicationBootstrap(): Promise<void> {
     const c = this.client;
     c.once(Events.ClientReady, (ready) => this.onReady(ready));
-    c.on(Events.GuildCreate, (g) => this.safe('guildCreate', () => this.sync.upsert(g)));
-    c.on(Events.GuildUpdate, (_old, g) => this.safe('guildUpdate', () => this.sync.upsert(g)));
+    c.on(Events.GuildCreate, (g) => this.safe('guildCreate', async () => {
+      await this.sync.upsert(g);
+      await this.sync.syncGuild(g.id);
+    }));
+    c.on(Events.GuildUpdate, (_old, g) => this.safe('guildUpdate', () => this.sync.guildUpdated(g)));
     c.on(Events.GuildDelete, (g) => {
       if (g.available === false) return; // outage, not a kick
       return this.safe('guildDelete', () => this.sync.markLeft(g.id));
     });
+    c.on(Events.ChannelCreate, (channel) => {
+      if (channel.isDMBased()) return;
+      return this.safe('channelCreate', () => this.sync.upsertChannel(channel.guildId, {
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        position: 'position' in channel ? channel.position : 0,
+        parent_id: channel.parentId,
+      }));
+    });
+    c.on(Events.ChannelUpdate, (_old, channel) => {
+      if (channel.isDMBased()) return;
+      return this.safe('channelUpdate', () => this.sync.upsertChannel(channel.guildId, {
+        id: channel.id,
+        name: channel.name,
+        type: channel.type,
+        position: 'position' in channel ? channel.position : 0,
+        parent_id: channel.parentId,
+      }));
+    });
+    c.on(Events.ChannelDelete, (channel) => {
+      if (channel.isDMBased()) return;
+      return this.safe('channelDelete', () => this.sync.deleteChannel(channel.guildId, channel.id));
+    });
+    c.on(Events.GuildRoleCreate, (role) => this.safe('roleCreate', () => this.sync.upsertRole(role.guild.id, role)));
+    c.on(Events.GuildRoleUpdate, (_old, role) => this.safe('roleUpdate', () => this.sync.upsertRole(role.guild.id, role)));
+    c.on(Events.GuildRoleDelete, (role) => this.safe('roleDelete', () => this.sync.deleteRole(role.guild.id, role.id)));
     c.on(Events.GuildMemberAdd, (m) => this.safe('welcome', () => this.handleMember('welcome', m)));
     c.on(Events.GuildMemberRemove, (m) => this.safe('goodbye', () => this.handleMember('goodbye', m)));
     c.on(Events.Error, (err) => this.logger.error(`Client error: ${err.message}`));
@@ -72,6 +104,7 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   }
 
   async onApplicationShutdown(): Promise<void> {
+    if (this.syncTimer) clearInterval(this.syncTimer);
     await this.client.destroy();
   }
 
@@ -86,7 +119,17 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   private async onReady(ready: Client<true>): Promise<void> {
     this.logger.log(`Ready as ${ready.user.tag} with ${ready.guilds.cache.size} guild(s) on this shard`);
     ready.user.setPresence({ activities: [{ name: 'new members arrive', type: ActivityType.Watching }], status: 'online' });
-    await this.safe('initial sync', () => this.sync.upsertMany([...ready.guilds.cache.values()]));
+    await this.syncAll([...ready.guilds.cache.values()]);
+    this.syncTimer = setInterval(() => {
+      void this.syncAll([...ready.guilds.cache.values()]);
+    }, 3 * 60 * 60 * 1000);
+  }
+
+  private async syncAll(guilds: Guild[]): Promise<void> {
+    for (const guild of guilds) {
+      await this.safe(`sync ${guild.id}`, () => this.sync.syncGuild(guild.id));
+    }
+    await this.safe('publish guild reconciliation', () => this.sync.notifyReconciled());
   }
 
   private async handleMember(kind: MessageKind, member: GuildMember | PartialGuildMember): Promise<void> {

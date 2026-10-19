@@ -11,6 +11,8 @@ import { loginUrl } from '@/lib/utils';
 import type {
   Channel,
   GuildDetail,
+  GuildRefreshResult,
+  GuildRole,
   GuildSettings,
   GuildSummary,
   Me,
@@ -41,7 +43,7 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Guilds', 'Guild'],
+  tagTypes: ['Guilds', 'Guild', 'Channels', 'Roles'],
   refetchOnFocus: true,
   endpoints: (b) => ({
     getMe: b.query<Me, void>({ query: () => '/auth/me', keepUnusedDataFor: 300 }),
@@ -60,6 +62,21 @@ export const api = createApi({
       query: (guildId) => `/guilds/${guildId}/channels`,
       transformResponse: (r: { channels: Channel[] }) => r.channels,
       keepUnusedDataFor: 60,
+      providesTags: (_r, _e, guildId) => [{ type: 'Channels', id: guildId }],
+    }),
+    getRoles: b.query<GuildRole[], string>({
+      query: (guildId) => `/guilds/${guildId}/roles`,
+      transformResponse: (r: { roles: GuildRole[] }) => r.roles,
+      keepUnusedDataFor: 60,
+      providesTags: (_r, _e, guildId) => [{ type: 'Roles', id: guildId }],
+    }),
+    refreshGuild: b.mutation<GuildRefreshResult, string>({
+      query: (guildId) => ({ url: `/guilds/${guildId}/refresh`, method: 'POST' }),
+      invalidatesTags: (_r, _e, guildId) => [
+        { type: 'Guild', id: guildId },
+        { type: 'Channels', id: guildId },
+        { type: 'Roles', id: guildId },
+      ],
     }),
     getPresets: b.query<Preset[], void>({
       query: () => '/templates/presets',
@@ -69,6 +86,11 @@ export const api = createApi({
 
     saveMessage: b.mutation<MessageConfig, { guildId: string; kind: MessageKind; config: MessageConfig }>({
       query: ({ guildId, kind, config }) => ({ url: `/guilds/${guildId}/messages/${kind}`, method: 'PUT', body: config }),
+      transformResponse: (r: { config: MessageConfig }) => r.config,
+      invalidatesTags: (_r, _e, a) => [{ type: 'Guild', id: a.guildId }],
+    }),
+    resetMessage: b.mutation<MessageConfig, { guildId: string; kind: MessageKind }>({
+      query: ({ guildId, kind }) => ({ url: `/guilds/${guildId}/messages/${kind}`, method: 'DELETE' }),
       transformResponse: (r: { config: MessageConfig }) => r.config,
       invalidatesTags: (_r, _e, a) => [{ type: 'Guild', id: a.guildId }],
     }),
@@ -92,8 +114,11 @@ export const {
   useGetGuildsQuery,
   useGetGuildQuery,
   useGetChannelsQuery,
+  useGetRolesQuery,
+  useRefreshGuildMutation,
   useGetPresetsQuery,
   useSaveMessageMutation,
+  useResetMessageMutation,
   useSendTestMutation,
   useUploadBackgroundMutation,
 } = api;

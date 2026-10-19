@@ -8,9 +8,9 @@ import {
   MessageKind,
   normalizeMessageConfig,
 } from '../shared/message-config';
+import { GUILD_SETTINGS_CHANGED_CHANNEL, guildSettingsCacheKey } from '../guilds/guild-events';
 import { RedisService } from './redis.service';
 
-const CHANNEL = 'dexbotx:settings:invalidate';
 const REDIS_TTL_SECONDS = 60 * 60;
 const L1_TTL_MS = 60 * 1000;
 const L1_MAX_ENTRIES = 5000;
@@ -37,14 +37,10 @@ export class SettingsCache implements OnModuleInit {
 
   onModuleInit(): void {
     const sub = this.redis.createSubscriber();
-    sub.subscribe(CHANNEL).catch((err) => this.logger.error(`Subscribe failed: ${err.message}`));
+    sub.subscribe(GUILD_SETTINGS_CHANGED_CHANNEL).catch((err) => this.logger.error(`Subscribe failed: ${err.message}`));
     sub.on('message', (channel, guildId) => {
-      if (channel === CHANNEL) this.l1.delete(guildId);
+      if (channel === GUILD_SETTINGS_CHANGED_CHANNEL) this.l1.delete(guildId);
     });
-  }
-
-  private key(guildId: string): string {
-    return `cfg:${guildId}`;
   }
 
   async get(guildId: string): Promise<GuildMessages> {
@@ -54,7 +50,7 @@ export class SettingsCache implements OnModuleInit {
 
     let value: GuildMessages | null = null;
     try {
-      const cached = await this.redis.client.get(this.key(guildId));
+      const cached = await this.redis.client.get(guildSettingsCacheKey(guildId));
       if (cached) value = this.parse(JSON.parse(cached));
     } catch (err) {
       this.logger.warn(`Redis read failed for ${guildId}: ${(err as Error).message}`);
@@ -63,7 +59,7 @@ export class SettingsCache implements OnModuleInit {
     if (!value) {
       value = await this.loadFromDb(guildId);
       this.redis.client
-        .set(this.key(guildId), JSON.stringify(value), 'EX', REDIS_TTL_SECONDS)
+        .set(guildSettingsCacheKey(guildId), JSON.stringify(value), 'EX', REDIS_TTL_SECONDS)
         .catch((err) => this.logger.warn(`Redis write failed for ${guildId}: ${err.message}`));
     }
 
@@ -73,8 +69,8 @@ export class SettingsCache implements OnModuleInit {
 
   async invalidate(guildId: string): Promise<void> {
     this.l1.delete(guildId);
-    await this.redis.client.del(this.key(guildId));
-    await this.redis.client.publish(CHANNEL, guildId);
+    await this.redis.client.del(guildSettingsCacheKey(guildId));
+    await this.redis.client.publish(GUILD_SETTINGS_CHANGED_CHANNEL, guildId);
   }
 
   private parse(raw: unknown): GuildMessages {

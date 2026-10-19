@@ -22,7 +22,7 @@ export class GuildAccessGuard implements CanActivate {
     const match = userGuilds.find((g) => g.id === guildId);
     if (!match || !canManageGuild(match)) throw new ForbiddenException('You need the Manage Server permission in this server');
 
-    const row = await this.guilds.findInstalled(guildId);
+    const row = (await this.guilds.findInstalled(guildId)) ?? (await this.guilds.registerIfBotPresent(guildId));
     if (!row) throw new NotFoundException('DexBotX is not in this server yet');
     req.guild = row;
     return true;

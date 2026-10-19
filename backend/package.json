@@ -17,7 +17,8 @@
     "test": "jest --config jest.config.js",
     "test:e2e": "jest --config jest.e2e.config.js --runInBand --forceExit",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node dist/db/migrate.js"
+    "db:migrate": "node dist/db/migrate.js",
+    "db:backfill-guild-data": "node dist/db/backfill-guild-data.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

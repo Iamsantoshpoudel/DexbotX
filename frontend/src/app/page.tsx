@@ -5,7 +5,7 @@ import { CardMock } from '@/components/preview/card-mock';
 import { SiteHeader } from '@/components/site-header';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/misc';
-import { cn, loginUrl } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 const ERRORS: Record<string, string> = {
   access_denied: 'You cancelled the Discord login. No changes were made.',
@@ -58,9 +58,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
               <a href="/api/invite" className={cn(buttonVariants({ size: 'lg' }))}>
                 Add to Discord
               </a>
-              <a href={loginUrl('/dashboard')} className={cn(buttonVariants({ size: 'lg', variant: 'secondary' }))}>
+              <Link href="/dashboard" className={cn(buttonVariants({ size: 'lg', variant: 'secondary' }))}>
                 Open dashboard
-              </a>
+              </Link>
             </div>
           </div>
 
@@ -110,9 +110,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
       <footer className="border-t border-border/60 py-8">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 text-sm text-muted-foreground sm:px-6">
           <Logo />
-          <p>
-            Not affiliated with Discord Inc. <Link href="/dashboard" className="underline-offset-4 hover:underline">Dashboard</Link>
-          </p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Link href="/terms" className="underline-offset-4 hover:underline">Terms of Service</Link>
+            <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy Policy</Link>
+            <span>Not affiliated with Discord Inc.</span>
+          </div>
         </div>
       </footer>
     </>
