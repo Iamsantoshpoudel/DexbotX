@@ -29,7 +29,7 @@ services:
     name: dexbotx-zq8g
     runtime: node
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
     preDeployCommand: npm run db:migrate
     startCommand: npm run start
     healthCheckPath: /health/ready
@@ -52,7 +52,7 @@ services:
     name: dexbotx-bot
     runtime: node
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
     startCommand: npm run start:bot
     envVars:
       - fromGroup: dexbotx-backend-shared
@@ -91,7 +91,7 @@ services:
     name: dexbotx-worker
     runtime: node
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
     startCommand: npm run start:worker
     maxShutdownDelaySeconds: 30
     envVars:

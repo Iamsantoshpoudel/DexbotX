@@ -52,9 +52,9 @@ See `.env.example`. Required: `WEB_URL`, `DATABASE_URL`, `REDIS_URL`, `DISCORD_C
 
 For the production dashboard at `https://dexbotx.vercel.app` and API at `https://dexbotx-zq8g.onrender.com`:
 
-- Configure the Render API service with the Node runtime and root directory `backend`; use `npm ci && npm run build` as its build command and `npm run start` as its start command. Set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`. A production HTTP or localhost `WEB_URL` is rejected at startup. Set Render's health check path to `/health/ready`.
+- Configure the Render API service with the Node runtime and root directory `backend`; use `npm ci --include=dev && npm run build && npm prune --omit=dev` as its build command and `npm run start` as its start command. The backend pins Node to the 22.x line because an open-ended engine range lets Render select a newer major. Set `NODE_ENV=production` and `WEB_URL=https://dexbotx.vercel.app`. A production HTTP or localhost `WEB_URL` is rejected at startup. Set Render's health check path to `/health/ready`.
 - Set production `DATABASE_URL`, managed `REDIS_URL`, Discord credentials, and `SESSION_ENCRYPTION_KEY` in Render's environment. Keep `COOKIE_DOMAIN` unset so the secure host-only cookie is returned through Vercel's same-origin API proxy.
-- Create separate Render background workers using the Node runtime and root directory `backend`. Use `npm ci && npm run build` as each build command, then `npm run start:bot` for the bot and `npm run start:worker` for the queue worker. Configure both with the same database, Redis, and Discord environment as the API.
+- Create separate Render background workers using the Node runtime and root directory `backend`. Use `npm ci --include=dev && npm run build && npm prune --omit=dev` as each build command, then `npm run start:bot` for the bot and `npm run start:worker` for the queue worker. Configure both with the same database, Redis, and Discord environment as the API.
 - Register `https://dexbotx.vercel.app/api/auth/callback` in Discord Developer Portal → OAuth2 → Redirects. This exact URL is derived from `WEB_URL`.
 
 After deployment, `/auth/login` should redirect to Discord with that callback URL. Check `/health/ready` on the Render API and `/api/health/ready` through Vercel.
