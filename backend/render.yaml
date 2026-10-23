@@ -1,0 +1,128 @@
+envVarGroups:
+  - name: dexbotx-backend-shared
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: WEB_URL
+        value: https://dexbotx.vercel.app
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_SSL
+        value: "true"
+      - key: DATABASE_POOL_MAX
+        value: "10"
+      - key: BOT_PERMISSIONS
+        value: "52224"
+      - key: SHARD_COUNT
+        value: auto
+      - key: SESSION_TTL_SECONDS
+        value: "604800"
+      - key: WORKER_CONCURRENCY
+        value: "5"
+      - key: SUPABASE_BUCKET
+        value: card-backgrounds
+
+services:
+  - type: web
+    name: dexbotx-zq8g
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run db:migrate
+    startCommand: npm run start
+    healthCheckPath: /health/ready
+    envVars:
+      - fromGroup: dexbotx-backend-shared
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_CLIENT_SECRET
+        sync: false
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: SESSION_ENCRYPTION_KEY
+        sync: false
+
+  - type: worker
+    name: dexbotx-bot
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:bot
+    envVars:
+      - fromGroup: dexbotx-backend-shared
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DATABASE_URL
+      - key: REDIS_URL
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: REDIS_URL
+      - key: DISCORD_CLIENT_ID
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_CLIENT_ID
+      - key: DISCORD_CLIENT_SECRET
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_CLIENT_SECRET
+      - key: DISCORD_BOT_TOKEN
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_BOT_TOKEN
+      - key: SESSION_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: SESSION_ENCRYPTION_KEY
+
+  - type: worker
+    name: dexbotx-worker
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start:worker
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - fromGroup: dexbotx-backend-shared
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DATABASE_URL
+      - key: REDIS_URL
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: REDIS_URL
+      - key: DISCORD_CLIENT_ID
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_CLIENT_ID
+      - key: DISCORD_CLIENT_SECRET
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_CLIENT_SECRET
+      - key: DISCORD_BOT_TOKEN
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: DISCORD_BOT_TOKEN
+      - key: SESSION_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: dexbotx-zq8g
+          envVarKey: SESSION_ENCRYPTION_KEY
