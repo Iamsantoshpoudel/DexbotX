@@ -19,6 +19,7 @@ import type {
   MessageConfig,
   MessageKind,
   Preset,
+  SavedMessage,
 } from '@/lib/types';
 
 const rawBaseQuery = fetchBaseQuery({
@@ -45,6 +46,7 @@ export const api = createApi({
   baseQuery,
   tagTypes: ['Guilds', 'Guild', 'Channels', 'Roles'],
   refetchOnFocus: true,
+  refetchOnMountOrArgChange: false,
   endpoints: (b) => ({
     getMe: b.query<Me, void>({ query: () => '/auth/me', keepUnusedDataFor: 300 }),
     logout: b.mutation<void, void>({ query: () => ({ url: '/auth/logout', method: 'POST' }) }),
@@ -54,8 +56,14 @@ export const api = createApi({
       transformResponse: (r: { guilds: GuildSummary[] }) => r.guilds,
       providesTags: ['Guilds'],
     }),
-    getGuild: b.query<{ guild: GuildDetail; settings: GuildSettings }, string>({
+    getGuild: b.query<{
+      guild: GuildDetail;
+      settings: GuildSettings;
+      imageKeys: Record<MessageKind, string | null>;
+      assetHashes: { avatar: string | null; banner: string | null };
+    }, string>({
       query: (guildId) => `/guilds/${guildId}`,
+      keepUnusedDataFor: 600,
       providesTags: (_r, _e, guildId) => [{ type: 'Guild', id: guildId }],
     }),
     getChannels: b.query<Channel[], string>({
@@ -84,15 +92,33 @@ export const api = createApi({
       keepUnusedDataFor: 3600,
     }),
 
-    saveMessage: b.mutation<MessageConfig, { guildId: string; kind: MessageKind; config: MessageConfig }>({
+    saveMessage: b.mutation<SavedMessage, { guildId: string; kind: MessageKind; config: MessageConfig }>({
       query: ({ guildId, kind, config }) => ({ url: `/guilds/${guildId}/messages/${kind}`, method: 'PUT', body: config }),
-      transformResponse: (r: { config: MessageConfig }) => r.config,
-      invalidatesTags: (_r, _e, a) => [{ type: 'Guild', id: a.guildId }],
+      async onQueryStarted({ guildId, kind }, { dispatch, queryFulfilled }) {
+        try {
+          const { data: saved } = await queryFulfilled;
+          dispatch(api.util.updateQueryData('getGuild', guildId, (current) => {
+            current.settings[kind] = saved.config;
+            current.imageKeys[kind] = saved.imageKey;
+          }));
+        } catch {
+          // The mutation result reports save failures to its caller.
+        }
+      },
     }),
-    resetMessage: b.mutation<MessageConfig, { guildId: string; kind: MessageKind }>({
+    resetMessage: b.mutation<SavedMessage, { guildId: string; kind: MessageKind }>({
       query: ({ guildId, kind }) => ({ url: `/guilds/${guildId}/messages/${kind}`, method: 'DELETE' }),
-      transformResponse: (r: { config: MessageConfig }) => r.config,
-      invalidatesTags: (_r, _e, a) => [{ type: 'Guild', id: a.guildId }],
+      async onQueryStarted({ guildId, kind }, { dispatch, queryFulfilled }) {
+        try {
+          const { data: saved } = await queryFulfilled;
+          dispatch(api.util.updateQueryData('getGuild', guildId, (current) => {
+            current.settings[kind] = saved.config;
+            current.imageKeys[kind] = saved.imageKey;
+          }));
+        } catch {
+          // The mutation result reports reset failures to its caller.
+        }
+      },
     }),
     /** multipart/form-data; fetchBaseQuery leaves the Content-Type to the browser so the boundary is set correctly. */
     uploadBackground: b.mutation<{ path: string }, { guildId: string; file: File }>({

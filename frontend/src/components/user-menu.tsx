@@ -1,6 +1,7 @@
 'use client';
 
 import { LogOut } from 'lucide-react';
+import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
 import { useLogoutMutation } from '@/store/api';
 import type { Me } from '@/lib/types';
@@ -25,7 +26,7 @@ export function UserMenu({ me }: { me: Me }) {
   async function onLogout() {
     await logout().unwrap().catch(() => undefined);
     // Hard navigation drops every cached query so the next visitor on this browser sees nothing.
-    window.location.assign('/');
+    window.location.assign(new URL('/', window.location.origin));
   }
 
   const name = me.globalName ?? me.username;
@@ -36,10 +37,9 @@ export function UserMenu({ me }: { me: Me }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Account menu for ${name}`}
-        className="flex items-center gap-2 rounded-full border border-border bg-card/60 py-1 pl-1 pr-1 text-sm hover:bg-muted sm:pr-3"
+        className="flex min-h-11 min-w-11 items-center gap-2 rounded-lg border border-border bg-card/60 py-1 pl-1 pr-1 text-sm hover:bg-muted sm:pr-3"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={me.avatarUrl} alt="" width={28} height={28} className="size-7 rounded-full" referrerPolicy="no-referrer" />
+        <Image src={me.avatarUrl} alt="" width={28} height={28} sizes="28px" className="size-7 rounded-full" referrerPolicy="no-referrer" />
         <span className="hidden max-w-32 truncate sm:inline">{name}</span>
       </button>
       {open && (

@@ -1,8 +1,7 @@
-import { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createCanvas } from '@napi-rs/canvas';
-import { ChannelType } from 'discord.js';
+import { ChannelType, type GuildMember } from 'discord.js';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { eq, sql } from 'drizzle-orm';
@@ -19,9 +18,12 @@ import { BotService } from '../src/bot/bot.service';
 import { DatabaseService } from '../src/db/database.service';
 import { auditLogs, guildChannels, guildRoles, guilds } from '../src/db/schema';
 import { SettingsCache } from '../src/redis/settings-cache.service';
+import { RedisService } from '../src/redis/redis.service';
 import { MemberEventsQueue } from '../src/queue/member-events.queue';
 import { WorkerModule } from '../src/worker/worker.module';
 import { APP_CONFIG } from '../src/core/config';
+import { SessionService } from '../src/auth/session.service';
+import { WelcomeService } from '../src/welcome/welcome.service';
 
 const PG_PORT = 54329;
 const REDIS_PORT = 63799;
@@ -42,10 +44,13 @@ let workerModule: TestingModule;
 const SUPA = 'https://test.supabase.co';
 const METRICS_TOKEN = 'metrics-token-1234567890';
 const storageObjects = new Map<string, Buffer>();
-const storageCalls: Array<{ method: string; path: string; body?: any }> = [];
+const storageCalls: Array<{ method: string; path: string; body?: RequestInit['body'] }> = [];
 const realFetch = global.fetch;
-const discordCalls: Array<{ method: string; path: string; init: any }> = [];
+const discordCalls: Array<{ method: string; path: string; init: RequestInit }> = [];
 let failMessagePost = false;
+
+type GuildSummary = { id: string; inviteUrl: string | null; botInstalled: boolean };
+type ChannelSummary = { name: string };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -60,8 +65,8 @@ async function pngBytes(): Promise<Buffer> {
 }
 
 function installFetchStub(png: Buffer) {
-  global.fetch = (async (input: any, init: any = {}) => {
-    const url: string = typeof input === 'string' ? input : (input.url ?? String(input));
+  global.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = (init.method ?? 'GET').toUpperCase();
     const base = 'https://discord.com/api/v10';
     if (url.startsWith(base)) {
@@ -160,6 +165,19 @@ async function startPostgres(dir: string): Promise<void> {
 }
 
 async function startRedis(): Promise<void> {
+  const externalRedisUrl = process.env.DEXBOTX_E2E_REDIS_URL;
+  if (externalRedisUrl) {
+    const Redis = (await import('ioredis')).default;
+    const client = new Redis(externalRedisUrl, { lazyConnect: true });
+    try {
+      await client.connect();
+      await client.ping();
+    } finally {
+      client.disconnect();
+    }
+    return;
+  }
+
   redisProc = spawn('redis-server', ['--port', String(REDIS_PORT), '--save', '', '--appendonly', 'no', '--bind', '127.0.0.1'], { stdio: ['ignore', 'pipe', 'pipe'] });
   await new Promise<void>((resolve, reject) => {
     const t = setTimeout(() => reject(new Error('redis start timeout')), 15000);
@@ -190,7 +208,7 @@ beforeAll(async () => {
     WEB_URL: WEB,
     DATABASE_URL: url,
     DATABASE_SSL: 'false',
-    REDIS_URL: `redis://127.0.0.1:${REDIS_PORT}`,
+    REDIS_URL: process.env.DEXBOTX_E2E_REDIS_URL ?? `redis://127.0.0.1:${REDIS_PORT}`,
     DISCORD_CLIENT_ID: '123456789012345678',
     DISCORD_CLIENT_SECRET: 'secret-secret-secret',
     DISCORD_BOT_TOKEN: 'bot-token-bot-token-bot-token',
@@ -260,7 +278,10 @@ describe('DexBotX API', () => {
   it('serves presets publicly with cache headers', async () => {
     const res = await http().get('/templates/presets').expect(200);
     expect(res.headers['cache-control']).toContain('max-age=3600');
+    expect(res.headers.etag).toBeTruthy();
+    expect(res.headers['server-timing']).toMatch(/^app;dur=/);
     expect(res.body.presets.length).toBeGreaterThanOrEqual(10);
+    await http().get('/templates/presets').set('If-None-Match', res.headers.etag).expect(304);
   });
 
   it('sets security headers', async () => {
@@ -331,11 +352,14 @@ describe('DexBotX API', () => {
 
   it('lists only servers the user can manage, flagging where the bot is missing', async () => {
     const res = await http().get('/guilds').set(authed()).expect(200);
-    const byId = Object.fromEntries(res.body.guilds.map((g: any) => [g.id, g]));
+    const guilds = res.body.guilds as GuildSummary[];
+    const byId = Object.fromEntries(guilds.map((guild) => [guild.id, guild]));
     expect(Object.keys(byId).sort()).toEqual([G1, G3]);
     expect(byId[G1]).toMatchObject({ botInstalled: true, inviteUrl: null });
     expect(byId[G3].botInstalled).toBe(false);
-    const invite = new URL(byId[G3].inviteUrl);
+    const inviteUrl = byId[G3].inviteUrl;
+    if (!inviteUrl) throw new Error('Expected a bot invite URL for a server without the bot');
+    const invite = new URL(inviteUrl);
     expect(invite.searchParams.get('permissions')).toBe('52224');
     expect(invite.searchParams.get('guild_id')).toBe(G3);
     expect(res.body.guilds[0].id).toBe(G1); // installed first
@@ -354,7 +378,8 @@ describe('DexBotX API', () => {
     expect(res.body.guild).toMatchObject({ id: G1, name: 'Alpha Guild', memberCount: 120 });
     expect(res.body.settings.welcome.enabled).toBe(false);
     const ch = await http().get(`/guilds/${G1}/channels`).set(authed()).expect(200);
-    expect(ch.body.channels.map((c: any) => c.name)).toEqual(['welcome', 'news']);
+    const channels = ch.body.channels as ChannelSummary[];
+    expect(channels.map((channel) => channel.name)).toEqual(['welcome', 'news']);
     expect(ch.body.channels[0].category).toBe('Info');
   });
 
@@ -387,10 +412,12 @@ describe('DexBotX API', () => {
   it('saves a template, records an audit entry and refreshes caches', async () => {
     const res = await http().put(`/guilds/${G1}/messages/welcome`).set(authed()).send(validWelcome()).expect(200);
     expect(res.body.config.channelId).toBe(C1);
+    expect(res.body.imageKey).toMatch(/^[a-f0-9]{64}$/);
 
     const detail = await http().get(`/guilds/${G1}`).set(authed()).expect(200);
     expect(detail.body.settings.welcome.content).toBe('Welcome {user} to {server}!');
     expect(detail.body.settings.goodbye.enabled).toBe(false);
+    expect(detail.body.imageKeys.welcome).toBe(res.body.imageKey);
 
     const db = app.get(DatabaseService).db;
     const audit = await db.select().from(auditLogs).where(eq(auditLogs.guildId, G1));
@@ -406,16 +433,61 @@ describe('DexBotX API', () => {
     expect((await botCache.get(G1)).welcome.content).toBe('Updated text {user}');
   });
 
-  it('renders a real PNG preview for the logged-in user', async () => {
-    const res = await http().post(`/guilds/${G1}/messages/welcome/preview`).set(authed()).send(validWelcome()).buffer(true).parse((r, cb) => {
+  it('caches previews by image inputs, supports conditional requests, and invalidates on changed inputs', async () => {
+    const redis = app.get(RedisService).client;
+    const existingKeys = await redis.keys('card:*');
+    if (existingKeys.length) await redis.del(...existingKeys);
+    const service = app.get(WelcomeService);
+    const render = jest.spyOn(service['builder'], 'buildImage');
+    const preview = (config: object, cookie = sessionCookie) => http()
+      .post(`/guilds/${G1}/messages/welcome/preview`)
+      .set({ Cookie: cookie, Origin: WEB })
+      .send(config)
+      .buffer(true)
+      .parse((r, cb) => {
       const chunks: Buffer[] = [];
       r.on('data', (c: Buffer) => chunks.push(c));
       r.on('end', () => cb(null, Buffer.concat(chunks)));
-    }).expect(200);
-    expect(res.headers['content-type']).toBe('image/png');
-    const buf = res.body as Buffer;
-    expect(buf.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
-    expect(buf.readUInt32BE(16)).toBe(1100);
+      });
+    const config = validWelcome();
+    const first = await preview(config).expect(200);
+    expect(first.headers['content-type']).toBe('image/png');
+    expect(first.headers['cache-control']).toBe('private, max-age=0, must-revalidate');
+    expect(first.headers['x-card-key']).toMatch(/^[a-f0-9]{64}$/);
+    expect(first.headers.etag).toBe(`"${first.headers['x-card-key']}"`);
+    const firstPng = first.body as Buffer;
+    expect(firstPng.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+    expect(firstPng.readUInt32BE(16)).toBe(1100);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    const second = await preview(config).expect(200);
+    expect(second.headers['x-card-key']).toBe(first.headers['x-card-key']);
+    expect(second.headers.etag).toBe(first.headers.etag);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    await http()
+      .post(`/guilds/${G1}/messages/welcome/preview`)
+      .set({ ...authed(), 'If-None-Match': first.headers.etag })
+      .send(config)
+      .expect(304);
+    expect(render).toHaveBeenCalledTimes(1);
+
+    const titleChanged = await preview(validWelcome({
+      image: { ...config.image, title: 'Changed title' },
+    })).expect(200);
+    expect(titleChanged.headers['x-card-key']).not.toBe(first.headers['x-card-key']);
+    const accentChanged = await preview(validWelcome({
+      image: { ...config.image, accentColor: '#abcdef' },
+    })).expect(200);
+    expect(accentChanged.headers['x-card-key']).not.toBe(first.headers['x-card-key']);
+
+    const alternate = await app.get(SessionService).create(
+      { id: USER_ID, username: 'tester', global_name: 'Test Er', avatar: 'changed-avatar-hash' },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const avatarChanged = await preview(config, `dexbotx_sid=${alternate.sid}`).expect(200);
+    expect(avatarChanged.headers['x-card-key']).not.toBe(first.headers['x-card-key']);
+    render.mockRestore();
   });
 
   it('sends a test message through Discord with mentions locked down', async () => {
@@ -423,7 +495,7 @@ describe('DexBotX API', () => {
     const res = await http().post(`/guilds/${G1}/messages/welcome/test`).set(authed()).expect(200);
     expect(res.body).toEqual({ channelId: C1 });
     const post = discordCalls.find((c) => c.method === 'POST' && c.path === `/channels/${C1}/messages`)!;
-    expect(post.init.headers.Authorization).toMatch(/^Bot /);
+    expect(new Headers(post.init.headers).get('authorization')).toMatch(/^Bot /);
     const form = post.init.body as FormData;
     const payload = JSON.parse(String(form.get('payload_json')));
     expect(payload.content).toBe('Updated text <@777777777777777777>');
@@ -551,7 +623,7 @@ describe('Bot → queue → worker', () => {
       type: ChannelType.GuildText,
       permissionsFor: () => ({ has: () => opts.hasPerms !== false }),
     };
-    const guild: any = {
+    const guild = {
       id: G1,
       name: 'Alpha Guild',
       memberCount: 121,
@@ -572,7 +644,10 @@ describe('Bot → queue → worker', () => {
     };
   }
 
-  const handle = (kind: 'welcome' | 'goodbye', member: unknown) => (botModule.get(BotService) as any).handleMember(kind, member);
+  const handle = (kind: 'welcome' | 'goodbye', member: unknown) =>
+    (botModule.get(BotService) as unknown as {
+      handleMember: (event: 'welcome' | 'goodbye', guildMember: GuildMember) => Promise<void>;
+    }).handleMember(kind, member as GuildMember);
   const queue = () => botModule.get(MemberEventsQueue).queue;
   const totalJobs = async () => Object.values(await queue().getJobCounts()).reduce((a, b) => a + b, 0);
   const waitFor = async <T>(fn: () => Promise<T | undefined | false>, ms = 15000): Promise<T> => {

@@ -66,6 +66,11 @@ export interface GuildSettings {
   goodbye: MessageConfig;
 }
 
+export interface SavedMessage {
+  config: MessageConfig;
+  imageKey: string | null;
+}
+
 export interface Channel {
   id: string;
   name: string;

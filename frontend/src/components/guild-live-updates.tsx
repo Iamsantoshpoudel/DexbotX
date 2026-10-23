@@ -32,7 +32,9 @@ export function GuildLiveUpdates() {
             api.endpoints.getGuild.initiate(decodeURIComponent(currentGuild), { forceRefetch: true, subscribe: false }),
           );
           void request.unwrap().catch((error: unknown) => {
-            if (errorStatus(error) === 403 || errorStatus(error) === 404) window.location.assign('/dashboard');
+            if (errorStatus(error) === 403 || errorStatus(error) === 404) {
+              window.location.assign(new URL('/dashboard', window.location.origin));
+            }
           });
         }
       } else {

@@ -192,11 +192,20 @@ export class GuildsService {
     const key = guildChannelsCacheKey(guildId);
     const cached = await this.redis.client.get(key);
     if (cached) return JSON.parse(cached) as ChannelInfo[];
-    const rows = await this.database.db.select().from(guildChannels).where(eq(guildChannels.guildId, guildId));
+    const rows = await this.database.db
+      .select({
+        id: guildChannels.id,
+        name: guildChannels.name,
+        type: guildChannels.type,
+        parentId: guildChannels.parentId,
+        position: guildChannels.position,
+      })
+      .from(guildChannels)
+      .where(and(eq(guildChannels.guildId, guildId), inArray(guildChannels.type, [0, 4, 5])))
+      .orderBy(guildChannels.position);
     const categories = new Map(rows.filter((row) => row.type === 4).map((row) => [row.id, row.name]));
     const list = rows
       .filter((row) => row.type === 0 || row.type === 5)
-      .sort((a, b) => a.position - b.position)
       .map<ChannelInfo>((row) => ({ id: row.id, name: row.name, category: row.parentId ? (categories.get(row.parentId) ?? null) : null }));
     await this.redis.client.set(key, JSON.stringify(list), 'EX', CHANNELS_TTL);
     return list;

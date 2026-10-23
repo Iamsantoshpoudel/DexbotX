@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { createCanvas, GlobalFonts, Image, loadImage, SKRSContext2D } from '@napi-rs/canvas';
 import { existsSync } from 'node:fs';
@@ -26,6 +27,8 @@ interface StyleDef {
 const W = 1100;
 const H = 400;
 const FONT = '"Inter", "Noto Sans Devanagari", "Noto Sans", "Liberation Sans", sans-serif';
+const DECODED_IMAGE_TTL_MS = 10 * 60 * 1000;
+const DECODED_IMAGE_CACHE_MAX = 64;
 
 const STYLES: Record<ImageStyleId, StyleDef> = {
   midnight: {
@@ -74,6 +77,8 @@ function rgba(hex: string, alpha: number): string {
 @Injectable()
 export class RenderService {
   private readonly logger = new Logger(RenderService.name);
+  private readonly decodedImages = new Map<string, { image: Image; expires: number }>();
+  private readonly decodingImages = new Map<string, Promise<Image | null>>();
   private readonly limiter = new Semaphore(4);
   private static fontsRegistered = false;
 
@@ -114,10 +119,32 @@ export class RenderService {
 
   private async safeLoad(buf: Buffer | null): Promise<Image | null> {
     if (!buf) return null;
+    const key = createHash('sha256').update(buf).digest('hex');
+    const cached = this.decodedImages.get(key);
+    if (cached && cached.expires > Date.now()) return cached.image;
+    if (cached) this.decodedImages.delete(key);
+
+    const pending = this.decodingImages.get(key);
+    if (pending) return pending;
+
+    const decoding = this.decodeImage(key, buf);
+    this.decodingImages.set(key, decoding);
+    return decoding;
+  }
+
+  private async decodeImage(key: string, buf: Buffer): Promise<Image | null> {
     try {
-      return await loadImage(buf);
+      const image = await loadImage(buf);
+      if (this.decodedImages.size >= DECODED_IMAGE_CACHE_MAX) {
+        const oldest = this.decodedImages.keys().next().value;
+        if (oldest) this.decodedImages.delete(oldest);
+      }
+      this.decodedImages.set(key, { image, expires: Date.now() + DECODED_IMAGE_TTL_MS });
+      return image;
     } catch {
       return null;
+    } finally {
+      this.decodingImages.delete(key);
     }
   }
 

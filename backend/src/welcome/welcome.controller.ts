@@ -20,7 +20,7 @@ export class WelcomeController {
     @CurrentSession() session: SessionData,
     @Req() req: AuthedRequest,
   ) {
-    return { config: await this.welcome.save(req.guild!, session, kind, body) };
+    return this.welcome.save(req.guild!, session, kind, body);
   }
 
   @Delete(':kind')
@@ -30,7 +30,7 @@ export class WelcomeController {
     @CurrentSession() session: SessionData,
     @Req() req: AuthedRequest,
   ) {
-    return { config: await this.welcome.reset(req.guild!, session, kind) };
+    return this.welcome.reset(req.guild!, session, kind);
   }
 
   /** Renders the real card with the logged-in user's avatar, so the dashboard preview matches what the bot posts. */
@@ -44,9 +44,19 @@ export class WelcomeController {
     @Req() req: AuthedRequest,
     @Res() res: Response,
   ): Promise<void> {
-    const png = await this.welcome.preview(req.guild!, session, body);
-    res.setHeader('Cache-Control', 'no-store');
-    res.type('image/png').send(png);
+    const preview = await this.welcome.preview(req.guild!, session, body, req.get('if-none-match'));
+    res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+    if (preview.imageKey) {
+      const etag = `"${preview.imageKey}"`;
+      res.setHeader('X-Card-Key', preview.imageKey);
+      res.setHeader('ETag', etag);
+    }
+    res.type('image/png');
+    if (preview.notModified) {
+      res.status(304).end();
+      return;
+    }
+    res.send(preview.buffer);
   }
 
   @Post(':kind/test')

@@ -30,6 +30,16 @@ describe('RenderService', () => {
     expect(pngSize(png).w).toBe(1100);
   });
 
+  it('reuses decoded images for repeated renders', async () => {
+    const png = await render.renderCard({
+      style: 'midnight', title: '', subtitle: '', name: 'Dex', accentColor: '#ffffff',
+      avatarShape: 'circle', showMemberCount: false, memberCountText: '', avatar: null, banner: null,
+    });
+    const first = await render['safeLoad'](png);
+    const second = await render['safeLoad'](png);
+    expect(second).toBe(first);
+  });
+
   it('builds a message with mention, embed referencing the attached card, and capped lengths', async () => {
     const cfg = defaultMessageConfig('welcome');
     cfg.content = 'Hi {user} '.padEnd(3000, 'x');

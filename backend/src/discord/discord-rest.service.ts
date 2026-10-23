@@ -5,6 +5,10 @@ import type { BuiltMessage } from '../render/message-builder.service';
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://dexbotx.app, 1.0.0)';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export class DiscordApiError extends Error {
   constructor(
     readonly status: number,
@@ -76,15 +80,21 @@ export class DiscordRestService {
     });
     if (res.status === 204) return undefined as T;
     const text = await res.text();
-    let body: any = undefined;
+    let body: unknown;
     try {
       body = text ? JSON.parse(text) : undefined;
     } catch {
       /* non-JSON error body */
     }
     if (!res.ok) {
-      const retryAfter = res.status === 429 ? Number(body?.retry_after ?? res.headers.get('retry-after') ?? 1) : undefined;
-      throw new DiscordApiError(res.status, body?.code, body?.message ?? `Discord API error ${res.status}`, retryAfter);
+      const errorBody = isRecord(body) ? body : undefined;
+      const retryAfterValue = errorBody?.retry_after;
+      const retryAfter = res.status === 429
+        ? Number(typeof retryAfterValue === 'number' || typeof retryAfterValue === 'string' ? retryAfterValue : res.headers.get('retry-after') ?? 1)
+        : undefined;
+      const discordCode = typeof errorBody?.code === 'number' ? errorBody.code : undefined;
+      const message = typeof errorBody?.message === 'string' ? errorBody.message : `Discord API error ${res.status}`;
+      throw new DiscordApiError(res.status, discordCode, message, retryAfter);
     }
     return body as T;
   }

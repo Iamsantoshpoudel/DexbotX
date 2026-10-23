@@ -1,19 +1,16 @@
 import { Gauge, Image as ImageIcon, LockKeyhole, MessageSquareText, Palette, Variable } from 'lucide-react';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { Logo } from '@/components/logo';
+import { LoginErrorBanner } from '@/components/login-error-banner';
 import { CardMock } from '@/components/preview/card-mock';
 import { SiteHeader } from '@/components/site-header';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/misc';
 import { cn } from '@/lib/utils';
 
-const ERRORS: Record<string, string> = {
-  access_denied: 'You cancelled the Discord login. No changes were made.',
-  login_failed: 'Discord login failed or expired. Please try again.',
-};
-
 const FEATURES = [
-  { icon: ImageIcon, title: 'Cards with their face on it', body: "Each member's avatar and your server banner are drawn onto a custom image the moment they join." },
+  { icon: ImageIcon, title: 'Personalized member cards', body: "Each member's avatar is drawn onto a custom image. Choose a style, and optionally use your server banner or a custom background." },
   { icon: MessageSquareText, title: 'Welcome and goodbye', body: 'Two independent messages, each with its own channel, text, embed and card.' },
   { icon: Palette, title: 'Presets to start fast', body: 'Pick a ready-made design, tweak the words and colours, and see the real card update as you type.' },
   { icon: Variable, title: 'Variables', body: 'Use {user}, {server}, {memberCount} and more. The text adapts to every member.' },
@@ -25,23 +22,20 @@ const FAQ = [
   { q: 'Is DexbotX free?', a: 'Yes. Adding the bot and configuring welcome and goodbye messages costs nothing.' },
   { q: 'What permissions does the bot need?', a: 'View Channel, Send Messages, Embed Links and Attach Files. It never asks for Administrator.' },
   { q: 'Who can change my server\u2019s settings?', a: 'Only people with the Manage Server permission (or the owner). The dashboard checks this on the server for every request.' },
-  { q: 'What does DexbotX store?', a: 'Your server\u2019s name, icon and member count, the messages you configure, a log of who changed which setting, and an encrypted login session. Member avatars are fetched from Discord when needed and are not stored.' },
+  { q: 'What does DexbotX store?', a: 'Your server\u2019s name, icon and member count, its channels and roles for dashboard selectors, the messages and custom backgrounds you configure, a log of who changed which setting, and an encrypted login session. Member avatars are fetched from Discord when needed and are not stored.' },
   { q: 'Why does the bot need the Server Members intent?', a: 'Discord only tells a bot when someone joins or leaves if this intent is on. It is used for nothing else.' },
 ];
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
-  const errorText = error ? ERRORS[error] : undefined;
+export const dynamic = 'force-static';
 
+export default function Home() {
   return (
     <>
       <SiteHeader />
       <main>
-        {errorText && (
-          <div role="alert" className="mx-auto mt-6 max-w-3xl rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            {errorText}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <LoginErrorBanner />
+        </Suspense>
 
         <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:pt-24">
           <div className="fade-up">
@@ -49,7 +43,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
               <span className="size-1.5 rounded-full bg-success" /> Free · public · works on any server
             </p>
             <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-              Welcome cards your members actually <span className="bg-gradient-to-r from-primary to-cyan-300 bg-clip-text text-transparent">notice</span>.
+              Welcome cards your members actually <span className="text-primary">notice</span>.
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
               DexbotX greets every new member with an image of their own avatar on your server&apos;s style. Set it all up in a clean dashboard. No commands to memorise.
@@ -113,6 +107,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ e
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <Link href="/terms" className="underline-offset-4 hover:underline">Terms of Service</Link>
             <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy Policy</Link>
+            <Link href="/dashboard" className="underline-offset-4 hover:underline">Dashboard</Link>
             <span>Not affiliated with Discord Inc.</span>
           </div>
         </div>

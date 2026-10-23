@@ -1,6 +1,6 @@
-import { redirect } from 'next/navigation';
+import { OverviewContent } from '@/components/dashboard/overview-content';
 
 export default async function GuildIndex({ params }: { params: Promise<{ guildId: string }> }) {
   const { guildId } = await params;
-  redirect(`/dashboard/${encodeURIComponent(guildId)}/welcome`);
+  return <OverviewContent guildId={guildId} />;
 }

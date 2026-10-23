@@ -4,21 +4,23 @@
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
 
-  --color-background: #090912;
-  --color-foreground: #ececf6;
-  --color-card: #11111d;
-  --color-border: #25253a;
-  --color-border-strong: #363653;
-  --color-switch: #2c2c44;
-  --color-input: #181826;
-  --color-muted: #181826;
-  --color-muted-foreground: #9898b3;
-  --color-primary: #7c6cff;
-  --color-primary-foreground: #0b0b16;
-  --color-destructive: #f4616f;
-  --color-success: #34d399;
-  --color-warning: #fbbf24;
-  --color-ring: #7c6cff;
+  --color-background: #171717;
+  --color-foreground: #e8eaed;
+  --color-card: #232323;
+  --color-border: #333333;
+  --color-border-strong: #3c4043;
+  --color-switch: #4a4d51;
+  --color-input: #171717;
+  --color-muted: #2a2a2a;
+  --color-muted-foreground: #9aa0a6;
+  --color-primary: #8ab4f8;
+  --color-primary-foreground: #0d1b2e;
+  --color-destructive: #f28b82;
+  --color-success: #81c995;
+  --color-warning: #fbbc04;
+  --color-ring: #8ab4f8;
+  --color-surface: #1c1c1c;
+  --color-accent-soft: #2a3a52;
 }
 
 html {
@@ -29,42 +31,38 @@ html {
    All foreground/background pairs here are checked for WCAG AA (4.5:1) contrast. */
 html.light {
   color-scheme: light;
-  --color-background: #f6f6fb;
-  --color-foreground: #14141f;
+  --color-background: #f8f9fa;
+  --color-foreground: #202124;
   --color-card: #ffffff;
-  --color-border: #dcdce8;
-  --color-border-strong: #bdbdd2;
-  --color-switch: #c9c9dc;
+  --color-border: #dadce0;
+  --color-border-strong: #bdc1c6;
+  --color-switch: #dadce0;
   --color-input: #ffffff;
-  --color-muted: #eeeef6;
-  --color-muted-foreground: #5a5a74;
-  --color-primary: #4a3ae6;
+  --color-muted: #f1f3f4;
+  --color-muted-foreground: #5f6368;
+  --color-primary: #1a73e8;
   --color-primary-foreground: #ffffff;
-  --color-destructive: #b81f30;
-  --color-success: #086b49;
-  --color-warning: #8f5500;
-  --color-ring: #4a3ae6;
+  --color-destructive: #b3261e;
+  --color-success: #137333;
+  --color-warning: #8a5a00;
+  --color-ring: #1a73e8;
+  --color-surface: #ffffff;
+  --color-accent-soft: #e8f0fe;
 }
 
-html.light body {
-  background-image:
-    radial-gradient(900px 480px at 12% -8%, rgb(74 58 230 / 0.09), transparent 60%),
-    radial-gradient(700px 420px at 100% 0%, rgb(14 165 233 / 0.07), transparent 60%);
+html.light .text-primary {
+  color: color-mix(in srgb, var(--color-primary) 80%, var(--color-foreground));
 }
 
 body {
   background-color: var(--color-background);
-  background-image:
-    radial-gradient(900px 480px at 12% -8%, rgb(124 108 255 / 0.16), transparent 60%),
-    radial-gradient(700px 420px at 100% 0%, rgb(34 211 238 / 0.08), transparent 60%);
-  background-repeat: no-repeat;
   color: var(--color-foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: rgb(124 108 255 / 0.4);
+  background: color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
 :focus-visible {

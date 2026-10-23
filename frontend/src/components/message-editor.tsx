@@ -11,8 +11,10 @@ import { StylePicker } from '@/components/editor/style-picker';
 import { DiscordPreview } from '@/components/preview/discord-preview';
 import { useCardPreview } from '@/components/preview/use-card-preview';
 import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/dashboard/ui';
+import { EditorSkeleton } from '@/components/dashboard/loading-skeleton';
 import { Input, Select, Textarea } from '@/components/ui/input';
-import { Badge, Card, Field, Skeleton } from '@/components/ui/misc';
+import { Badge, Card, Field } from '@/components/ui/misc';
 import { Switch } from '@/components/ui/switch';
 import { errorBody, errorMessage, isRateLimited, issuesByPath } from '@/lib/errors';
 import { FIELD_IDS, validateMessage } from '@/lib/message-schema';
@@ -113,7 +115,14 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
     return () => window.removeEventListener('beforeunload', warn);
   }, [dirty]);
 
-  const card = useCardPreview(guildId, kind, draft?.image ?? null);
+  const card = useCardPreview(
+    guildId,
+    kind,
+    draft?.image ?? null,
+    data?.imageKeys[kind] ?? null,
+    data?.assetHashes.avatar ?? null,
+    data?.assetHashes.banner ?? null,
+  );
 
   const ctx = useMemo<PlaceholderContext>(
     () => ({
@@ -129,21 +138,12 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   // Instant, field-level feedback from the same rules the server enforces.
   const problems = useMemo(() => (draft ? validateMessage(draft) : {}), [draft]);
   const hasProblems = Object.keys(problems).length > 0;
+  const copy = COPY[kind];
 
   if (isLoading || !data || !draft) {
-    return (
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
-        <div className="space-y-4">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-44" />
-          <Skeleton className="h-56" />
-        </div>
-        <Skeleton className="h-80" />
-      </div>
-    );
+    return <EditorSkeleton title={copy.title} description={copy.blurb} />;
   }
 
-  const copy = COPY[kind];
   const channel = visibleChannels?.find((c) => c.id === draft.channelId) ?? null;
   const savedChannelMissing = !!visibleChannels && !!draft.channelId && !channel;
   const grouped = Object.entries(
@@ -153,7 +153,6 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
       return acc;
     }, {}),
   );
-  const missingChannel = draft.enabled && !draft.channelId;
   // Server-side issues win over local ones; both use the same dotted field paths.
   const err = (path: string): string | undefined => issues[path] ?? problems[path];
   /** aria wiring for a field: invalid state plus a pointer to its error message (rendered by <Field>). */
@@ -186,7 +185,7 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
     }
     try {
       const saved = await save({ guildId, kind, config: draft! }).unwrap();
-      dispatch(markSaved(saved));
+      dispatch(markSaved(saved.config));
       toast.success(`${copy.title} saved`);
     } catch (e) {
       if (isRateLimited(e)) return; // the shared baseQuery already showed the wait time
@@ -216,8 +215,8 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   async function onReset() {
     if (!window.confirm(`Reset the saved ${kind} message to its defaults? Unsaved edits will be discarded.`)) return;
     try {
-      const config = await reset({ guildId, kind }).unwrap();
-      dispatch(markSaved(config));
+      const saved = await reset({ guildId, kind }).unwrap();
+      dispatch(markSaved(saved.config));
       toast.success(`${copy.title} reset to defaults`);
     } catch (e) {
       if (isRateLimited(e)) return;
@@ -231,24 +230,23 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
   }
 
   return (
-    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
+    <div>
+      <PageHeader
+        title={copy.title}
+        description={copy.blurb}
+        right={
+          <>
+            <Button type="button" variant="ghost" size="sm" className="min-h-11" onClick={onReset} disabled={resetting || saving}>
+              <RotateCcw /> {resetting ? 'Resetting…' : 'Reset'}
+            </Button>
+            <Badge tone={draft.enabled ? 'success' : 'neutral'}>{draft.enabled ? 'On' : 'Off'}</Badge>
+            <Switch aria-label={`Enable ${kind} message`} checked={draft.enabled} onCheckedChange={(enabled) => dispatch(patch({ enabled }))} />
+          </>
+        }
+      />
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
       <div className="space-y-4 pb-24">
         <Card className="p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">{copy.title}</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">{copy.blurb}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button type="button" variant="ghost" size="sm" onClick={onReset} disabled={resetting || saving}>
-                <RotateCcw /> {resetting ? 'Resetting…' : 'Reset'}
-              </Button>
-              <Badge tone={draft.enabled ? 'success' : 'neutral'}>{draft.enabled ? 'On' : 'Off'}</Badge>
-              <Switch aria-label={`Enable ${kind} message`} checked={draft.enabled} onCheckedChange={(enabled) => dispatch(patch({ enabled }))} />
-            </div>
-          </div>
-
-          <div className="mt-5">
             <Field label="Channel" htmlFor="channel" error={err('channelId')} hint="Where DexbotX posts this message.">
               <Select id="channel" value={draft.channelId ?? ''} {...a11y('channelId', 'channel')} onChange={(e) => dispatch(patch({ channelId: e.target.value || null }))}>
                 <option value="">{visibleChannels ? 'Select a channel…' : 'Loading channels…'}</option>
@@ -268,7 +266,6 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
                 <TriangleAlert className="size-3.5" /> The channel saved before no longer exists. Pick another one.
               </p>
             )}
-          </div>
         </Card>
 
         <Section title="Start from a preset" description="Replaces the text, embed and card below. Your channel and on/off setting stay.">
@@ -383,6 +380,7 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
             <Save /> {saving ? 'Saving…' : 'Save changes'}
           </Button>
         </div>
+      </div>
       </div>
     </div>
   );

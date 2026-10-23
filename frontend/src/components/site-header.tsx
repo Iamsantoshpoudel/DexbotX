@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -9,6 +10,7 @@ import { cn, loginUrl } from '@/lib/utils';
 import { useGetMeQuery } from '@/store/api';
 
 export function SiteHeader() {
+  const pathname = usePathname();
   const { data: me, isLoading } = useGetMeQuery();
   return (
     <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-md">
@@ -16,7 +18,7 @@ export function SiteHeader() {
         <Logo />
         <nav aria-label="Main" className="flex items-center gap-2">
           <ThemeToggle />
-          {isLoading ? (
+          {isLoading && !pathname.startsWith('/dashboard') ? (
             <div className="h-9 w-28 animate-pulse rounded-full bg-muted" />
           ) : me ? (
             <>

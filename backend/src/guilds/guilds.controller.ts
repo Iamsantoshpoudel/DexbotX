@@ -5,6 +5,8 @@ import type { AuthedRequest, SessionData } from '../common/types';
 import { SettingsCache } from '../redis/settings-cache.service';
 import { GuildAccessGuard } from './guild-access.guard';
 import { GuildsService } from './guilds.service';
+import { createCardKey } from '../shared/card-key';
+import type { MessageKind } from '../shared/message-config';
 
 @Controller('guilds')
 export class GuildsController {
@@ -21,9 +23,20 @@ export class GuildsController {
 
   @Get(':guildId')
   @UseGuards(GuildAccessGuard)
-  async detail(@Req() req: AuthedRequest) {
+  async detail(@CurrentSession() session: SessionData, @Req() req: AuthedRequest) {
     const guild = req.guild!;
-    return { guild: this.guilds.toDetail(guild), settings: await this.settings.get(guild.id) };
+    const settings = await this.settings.get(guild.id);
+    const imageKeys = {} as Record<MessageKind, string | null>;
+    for (const kind of ['welcome', 'goodbye'] as const) {
+      const config = settings[kind];
+      imageKeys[kind] = config.image.enabled ? createCardKey(config.image, session.avatarHash, guild.bannerHash) : null;
+    }
+    return {
+      guild: this.guilds.toDetail(guild),
+      settings,
+      imageKeys,
+      assetHashes: { avatar: session.avatarHash, banner: guild.bannerHash },
+    };
   }
 
   @Get(':guildId/channels')

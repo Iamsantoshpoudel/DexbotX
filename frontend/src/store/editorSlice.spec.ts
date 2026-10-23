@@ -6,8 +6,8 @@ const base: MessageConfig = {
   enabled: false,
   channelId: null,
   content: 'hi',
-  embed: { enabled: false, title: '', description: '', color: '#5b4bff', footer: '' },
-  image: { enabled: true, style: 'midnight', title: 'Welcome', subtitle: '', accentColor: '#7c6cff', useServerBanner: false, avatarShape: 'circle', showMemberCount: true, backgroundPath: null },
+  embed: { enabled: false, title: '', description: '', color: '#8ab4f8', footer: '' },
+  image: { enabled: true, style: 'midnight', title: 'Welcome', subtitle: '', accentColor: '#8ab4f8', useServerBanner: false, avatarShape: 'circle', showMemberCount: true, backgroundPath: null },
 };
 const init = () => reducer(undefined, load({ key: 'g:welcome', config: base }));
 

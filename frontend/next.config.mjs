@@ -6,16 +6,19 @@
  * BACKEND_URL is read at BUILD time (rewrites are baked into the standalone output).
  */
 const isDev = process.env.NODE_ENV !== 'production';
-const BACKEND_URL = (process.env.BACKEND_URL ?? (
+const configuredBackendUrl = (process.env.BACKEND_URL ?? (
   isDev ? 'http://localhost:4000' : 'https://dexbotx-zq8g.onrender.com'
-)).replace(/\/+$/, '');
+)).trim();
+const isBareLocalhost = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:\/.*)?$/i.test(configuredBackendUrl);
+const BACKEND_URL = (isDev && isBareLocalhost ? `http://${configuredBackendUrl}` : configuredBackendUrl).replace(/\/+$/, '');
 const backendUrl = new URL(BACKEND_URL);
 
 if (!['http:', 'https:'].includes(backendUrl.protocol) || backendUrl.username || backendUrl.password) {
   throw new Error('BACKEND_URL must be an HTTP(S) URL without embedded credentials');
 }
 const isComposeBackend = backendUrl.hostname === 'api' && backendUrl.port === '4000';
-if (!isDev && backendUrl.protocol !== 'https:' && !isComposeBackend) {
+const isLoopbackBackend = ['localhost', '127.0.0.1', '::1'].includes(backendUrl.hostname);
+if (!isDev && backendUrl.protocol !== 'https:' && !isComposeBackend && !isLoopbackBackend) {
   throw new Error('BACKEND_URL must use HTTPS in production');
 }
 
@@ -42,11 +45,20 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];
 
+const withBundleAnalyzer = process.env.ANALYZE === 'true'
+  ? (await import('@next/bundle-analyzer')).default({ enabled: true, openAnalyzer: false })
+  : (config) => config;
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: 'cdn.discordapp.com' },
+    ],
+  },
   async rewrites() {
     return [{ source: '/api/:path*', destination: `${BACKEND_URL}/:path*` }];
   },
@@ -59,4 +71,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

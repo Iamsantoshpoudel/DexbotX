@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service';
 import { auditLogs, GuildRow, guildSettings } from '../db/schema';
 import { DiscordApiError, DiscordRestService } from '../discord/discord-rest.service';
@@ -11,9 +11,18 @@ import type { SessionData } from '../common/types';
 import { guildBannerUrl, userAvatarUrl } from '../shared/discord-cdn';
 import { defaultMessageConfig, MessageConfig, MessageKind } from '../shared/message-config';
 import type { PlaceholderContext } from '../shared/placeholders';
+import { createCardKey, RENDER_VERSION } from '../shared/card-key';
+import { RedisService } from '../redis/redis.service';
+
+export { RENDER_VERSION };
+
+const CARD_CACHE_TTL_SECONDS = 24 * 60 * 60;
+const MAX_CACHED_CARD_BYTES = 1024 * 1024;
 
 @Injectable()
 export class WelcomeService {
+  private readonly logger = new Logger(WelcomeService.name);
+
   constructor(
     private readonly database: DatabaseService,
     private readonly cache: SettingsCache,
@@ -22,6 +31,7 @@ export class WelcomeService {
     private readonly builder: MessageBuilder,
     private readonly assets: AssetFetcher,
     private readonly storage: AssetStorage,
+    private readonly redis: RedisService,
   ) {}
 
   private sampleContext(guild: GuildRow, session: SessionData): PlaceholderContext {
@@ -35,12 +45,26 @@ export class WelcomeService {
   }
 
   private async sampleAssets(guild: GuildRow, session: SessionData, config: MessageConfig) {
-    const [avatar, banner, background] = await Promise.all([
-      this.assets.fetch(userAvatarUrl(session.userId, session.avatarHash, 256)),
-      this.assets.fetch(guildBannerUrl(guild.id, guild.bannerHash, 1024)),
-      config.image.enabled ? this.storage.get(config.image.backgroundPath) : null,
+    const wantsImage = config.image.enabled;
+    const useCustomBackground = wantsImage && !!config.image.backgroundPath;
+    const useServerBanner = wantsImage && config.image.useServerBanner;
+    const avatarUrl = userAvatarUrl(session.userId, session.avatarHash, 256);
+    if (useCustomBackground) {
+      const [avatar, background] = await Promise.all([
+        this.assets.fetch(avatarUrl),
+        this.storage.get(config.image.backgroundPath),
+      ]);
+      const banner = useServerBanner && !background
+        ? await this.assets.fetch(guildBannerUrl(guild.id, guild.bannerHash, 1024))
+        : null;
+      return { avatar, banner, background };
+    }
+
+    const [avatar, banner] = await Promise.all([
+      wantsImage ? this.assets.fetch(avatarUrl) : null,
+      useServerBanner ? this.assets.fetch(guildBannerUrl(guild.id, guild.bannerHash, 1024)) : null,
     ]);
-    return { avatar, banner, background };
+    return { avatar, banner, background: null };
   }
 
   /** A background may only reference an object uploaded for THIS server. */
@@ -54,7 +78,7 @@ export class WelcomeService {
     }
   }
 
-  async save(guild: GuildRow, session: SessionData, kind: MessageKind, config: MessageConfig): Promise<MessageConfig> {
+  async save(guild: GuildRow, session: SessionData, kind: MessageKind, config: MessageConfig): Promise<{ config: MessageConfig; imageKey: string | null }> {
     if (config.enabled && !config.channelId) {
       throw new BadRequestException({ message: 'Validation failed', issues: [{ path: 'channelId', message: 'Choose a channel to post in' }] });
     }
@@ -91,10 +115,10 @@ export class WelcomeService {
     await this.cache.invalidate(guild.id);
 
     await this.removeReplacedBackground(before, kind, config);
-    return config;
+    return { config, imageKey: config.image.enabled ? createCardKey(config.image, session.avatarHash, guild.bannerHash) : null };
   }
 
-  async reset(guild: GuildRow, session: SessionData, kind: MessageKind): Promise<MessageConfig> {
+  async reset(guild: GuildRow, session: SessionData, kind: MessageKind): Promise<{ config: MessageConfig; imageKey: string | null }> {
     const before = await this.cache.get(guild.id);
     const other = kind === 'welcome' ? 'goodbye' : 'welcome';
     const config = defaultMessageConfig(kind);
@@ -119,7 +143,7 @@ export class WelcomeService {
     await this.cache.invalidate(guild.id);
 
     await this.removeReplacedBackground(before, kind, config);
-    return config;
+    return { config, imageKey: config.image.enabled ? createCardKey(config.image, session.avatarHash, guild.bannerHash) : null };
   }
 
   private async removeReplacedBackground(
@@ -134,9 +158,35 @@ export class WelcomeService {
     }
   }
 
-  async preview(guild: GuildRow, session: SessionData, config: MessageConfig): Promise<Buffer> {
+  imageKey(guild: GuildRow, session: SessionData, config: MessageConfig): string | null {
+    return config.image.enabled ? createCardKey(config.image, session.avatarHash, guild.bannerHash) : null;
+  }
+
+  async preview(
+    guild: GuildRow,
+    session: SessionData,
+    config: MessageConfig,
+    ifNoneMatch?: string,
+  ): Promise<{ buffer: Buffer; imageKey: string | null; notModified: boolean }> {
     this.assertBackgroundOwnership(guild, config);
-    return this.builder.buildImage(config, this.sampleContext(guild, session), await this.sampleAssets(guild, session, config));
+    const imageKey = this.imageKey(guild, session, config);
+    const etag = imageKey ? `"${imageKey}"` : null;
+    const cacheKey = imageKey ? `card:${imageKey}` : null;
+    if (cacheKey && etag) {
+      try {
+        const cached = await this.redis.client.getBuffer(cacheKey);
+        if (cached) return { buffer: cached, imageKey, notModified: ifNoneMatch === etag };
+      } catch (err) {
+        this.logger.warn(`Card cache read failed: ${(err as Error).message}`);
+      }
+    }
+
+    const buffer = await this.builder.buildImage(config, this.sampleContext(guild, session), await this.sampleAssets(guild, session, config));
+    if (cacheKey && buffer.length <= MAX_CACHED_CARD_BYTES) {
+      this.redis.client.set(cacheKey, buffer, 'EX', CARD_CACHE_TTL_SECONDS)
+        .catch((err) => this.logger.warn(`Card cache write failed: ${err.message}`));
+    }
+    return { buffer, imageKey, notModified: false };
   }
 
   async sendTest(guild: GuildRow, session: SessionData, kind: MessageKind): Promise<{ channelId: string }> {

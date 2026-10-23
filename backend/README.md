@@ -80,6 +80,12 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 | GET | `/health` · `/health/ready` | liveness and readiness (database + Redis) |
 | GET | `/metrics` | Prometheus; needs `Authorization: Bearer $METRICS_TOKEN`, disabled when unset |
 
+## Performance
+- The API enables gzip/Brotli response compression and emits a `Server-Timing: app;dur=...` header on responses.
+- JSON `GET` responses include an ETag and default to `Cache-Control: private, no-cache`; clients can revalidate with `If-None-Match`. Explicit public caching (presets) and `no-store` routes keep their configured behavior.
+- Discord's current-user guild list is fetched with cursor pagination (200 items per request, up to 1,000) and cached in Redis. Guild channels, roles, metadata, and settings use the existing guild-scoped cache-aside reads and indexed Postgres lookups.
+- The backend uses a pooled `postgres`/Drizzle connection. Set `DATABASE_POOL_MAX` to tune each process; use the Supabase Session Pooler (port 5432) or direct connection for long-running API, bot, and worker processes.
+
 ## Security model
 - **Auth:** Discord OAuth2 (`identify guilds`), single-use `state` bound to the browser. The session lives in Redis behind an httpOnly, SameSite=Lax cookie; Discord tokens are stored AES-256-GCM encrypted, never in plain text.
 - **Authorization:** every `/guilds/:guildId/*` route re-checks server side that the user has Manage Server (or owns the server) and that the bot is installed. Guild ids from the client are never trusted.
@@ -100,7 +106,7 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 ## Tests
 ```bash
 npm test          # unit
-npm run test:e2e  # real embedded Postgres + real redis-server (must be on PATH)
+npm run test:e2e  # embedded Postgres + redis-server (or DEXBOTX_E2E_REDIS_URL for a dedicated test Redis)
 npm run typecheck
 ```
 CI (`.github/workflows/backend-ci.yml`) runs typecheck, unit, e2e, build, a production dependency audit and a Docker build.

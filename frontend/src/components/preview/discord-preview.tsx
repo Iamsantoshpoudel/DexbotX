@@ -25,7 +25,6 @@ export function DiscordPreview({ config, ctx, channelName, card }: Props) {
   const cardImage = showCard ? (
     <div className="mt-2 overflow-hidden rounded-lg" style={{ aspectRatio: '1100 / 400' }}>
       {card.url ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={card.url} alt="Preview of the card members will receive" className={`size-full object-cover transition-opacity ${card.loading ? 'opacity-60' : ''}`} />
       ) : (
         <Skeleton className="size-full rounded-lg bg-white/5" />
@@ -34,7 +33,7 @@ export function DiscordPreview({ config, ctx, channelName, card }: Props) {
   ) : null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-[#313338] text-[#dbdee1] shadow-xl">
+    <div className="overflow-hidden rounded-xl border border-border bg-[#313338] text-[#dbdee1] shadow-xl">
       <div className="flex items-center gap-1.5 border-b border-black/30 px-4 py-2.5 text-sm font-semibold text-white">
         <Hash className="size-4 text-[#80848e]" /> {channelName ?? 'choose-a-channel'}
       </div>

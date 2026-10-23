@@ -2,7 +2,7 @@ import type { HTMLAttributes, ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-2xl border border-border bg-card/80 backdrop-blur-sm', className)} {...props} />;
+  return <div className={cn('rounded-xl border border-border bg-card', className)} {...props} />;
 }
 
 export function Badge({ className, tone = 'neutral', ...props }: HTMLAttributes<HTMLSpanElement> & { tone?: 'neutral' | 'primary' | 'success' | 'warning' }) {
@@ -16,7 +16,7 @@ export function Badge({ className, tone = 'neutral', ...props }: HTMLAttributes<
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div aria-hidden className={cn('animate-pulse rounded-lg bg-muted', className)} />;
+  return <div aria-hidden className={cn('animate-pulse motion-reduce:animate-none rounded-lg bg-muted', className)} />;
 }
 
 export function Field({ label, hint, error, htmlFor, children, counter }: { label: string; hint?: string; error?: string; htmlFor?: string; children: ReactNode; counter?: string }) {

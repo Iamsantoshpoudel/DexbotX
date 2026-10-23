@@ -5,7 +5,7 @@ import type { MessageConfig } from './types';
  * Mirrors backend/src/shared/message-config.ts so mistakes are caught before a request is made.
  * The server remains the authority; this only gives instant, field-level feedback.
  */
-const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #5b4bff');
+const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #8ab4f8');
 const snowflake = z.string().regex(/^\d{17,20}$/, 'Choose a valid channel');
 
 export const BACKGROUND_PATH_RE = /^\d{17,20}\/[0-9a-f]{64}\.jpg$/;

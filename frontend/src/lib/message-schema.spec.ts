@@ -9,8 +9,8 @@ const valid: MessageConfig = {
   enabled: true,
   channelId: CHANNEL,
   content: 'Welcome {user}!',
-  embed: { enabled: false, title: '', description: '', color: '#5b4bff', footer: '' },
-  image: { enabled: true, style: 'midnight', title: 'Welcome', subtitle: 'Hi', accentColor: '#7c6cff', useServerBanner: false, avatarShape: 'circle', showMemberCount: true, backgroundPath: null },
+  embed: { enabled: false, title: '', description: '', color: '#8ab4f8', footer: '' },
+  image: { enabled: true, style: 'midnight', title: 'Welcome', subtitle: 'Hi', accentColor: '#8ab4f8', useServerBanner: false, avatarShape: 'circle', showMemberCount: true, backgroundPath: null },
 };
 const withImage = (image: Partial<MessageConfig['image']>): MessageConfig => ({ ...valid, image: { ...valid.image, ...image } });
 const withEmbed = (embed: Partial<MessageConfig['embed']>): MessageConfig => ({ ...valid, embed: { ...valid.embed, ...embed } });

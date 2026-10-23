@@ -2,12 +2,12 @@ import { gradientFor } from '@/lib/image-styles';
 import type { ImageStyleId } from '@/lib/types';
 
 /** A CSS drawing of the welcome card, used on the landing page. The dashboard shows the real server-rendered PNG. */
-export function CardMock({ style = 'midnight', title = 'Welcome', name = 'Nova', subtitle = 'You are member #1,204', accent = '#7c6cff', members = '1,204 members' }: { style?: ImageStyleId; title?: string; name?: string; subtitle?: string; accent?: string; members?: string }) {
+export function CardMock({ style = 'midnight', title = 'Welcome', name = 'Nova', subtitle = 'You are member #1,204', accent = 'var(--color-primary)', members = '1,204 members' }: { style?: ImageStyleId; title?: string; name?: string; subtitle?: string; accent?: string; members?: string }) {
   return (
     <div className="relative w-full overflow-hidden rounded-[2.5cqw] border border-white/10 shadow-2xl" style={{ aspectRatio: '1100 / 400', containerType: 'inline-size', background: gradientFor(style) }}>
       <div className="absolute -left-[8cqw] top-[2cqw] size-[40cqw] rounded-full opacity-35 blur-3xl" style={{ background: accent }} />
       <div className="absolute left-[9.5cqw] top-1/2 grid size-[21cqw] -translate-y-1/2 place-items-center rounded-full bg-[#0b0c1a] shadow-[0_0_4cqw_var(--ring)]" style={{ ['--ring' as string]: `${accent}aa`, border: `0.7cqw solid ${accent}` }}>
-        <div className="grid size-full place-items-center rounded-full text-[9cqw] font-extrabold text-white" style={{ background: `radial-gradient(circle at 30% 25%, ${accent}, #1b1b3a)` }}>
+        <div className="grid size-full place-items-center rounded-full text-[9cqw] font-extrabold text-white" style={{ background: `radial-gradient(circle at 30% 25%, ${accent}, var(--color-card))` }}>
           {name[0]}
         </div>
       </div>

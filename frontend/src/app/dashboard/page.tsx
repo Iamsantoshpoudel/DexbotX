@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { GuildIcon } from '@/components/guild-icon';
+import { SiteHeader } from '@/components/site-header';
+import { GuildListSkeleton } from '@/components/dashboard/loading-skeleton';
+import { useDelayedLoading } from '@/components/dashboard/use-delayed-loading';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Badge, Card, Skeleton } from '@/components/ui/misc';
+import { Badge, Card } from '@/components/ui/misc';
 import { errorMessage } from '@/lib/errors';
 import { readGuildsCache, writeGuildsCache } from '@/lib/server-cache';
 import { cn } from '@/lib/utils';
@@ -60,6 +63,7 @@ function DashboardContent() {
 
   const visibleGuilds =
     guilds ?? (cachedGuilds && me && cachedGuilds.userId === me.id ? cachedGuilds.guilds : undefined);
+  const showGuildSkeleton = useDelayedLoading(isLoading && !visibleGuilds);
 
   return (
     <div className="fade-up">
@@ -107,36 +111,41 @@ function DashboardContent() {
         </Card>
       )}
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {isLoading && !visibleGuilds && Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-36" />)}
-
-        {visibleGuilds?.map((g) => (
-          <Card key={g.id} className="flex flex-col gap-4 p-5 transition-colors hover:border-border-strong">
-            <div className="flex items-center gap-3">
-              <GuildIcon name={g.name} iconUrl={g.iconUrl} />
-              <div className="min-w-0">
-                <h2 className="truncate font-medium">{g.name}</h2>
-                <div className="mt-1 flex gap-1.5">
-                  {g.owner && (
-                    <Badge tone="warning">
-                      <Crown className="mr-1 size-3" /> Owner
-                    </Badge>
-                  )}
-                  <Badge tone={g.botInstalled ? 'success' : 'neutral'}>{g.botInstalled ? 'Bot added' : 'Not added'}</Badge>
+      <div className="mt-6">
+        {showGuildSkeleton ? (
+          <GuildListSkeleton />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {visibleGuilds?.map((g) => (
+              <Card
+                key={g.id}
+                className="flex flex-col gap-4 p-5 transition-colors hover:border-border-strong"
+                onMouseEnter={() => router.prefetch(`/dashboard/${g.id}/overview`)}
+                onFocusCapture={() => router.prefetch(`/dashboard/${g.id}/overview`)}
+              >
+                <div className="flex items-center gap-3">
+                  <GuildIcon name={g.name} iconUrl={g.iconUrl} />
+                  <div className="min-w-0">
+                    <h2 className="truncate font-medium">{g.name}</h2>
+                    <div className="mt-1 flex gap-1.5">
+                      {g.owner && <Badge tone="warning"><Crown className="mr-1 size-3" /> Owner</Badge>}
+                      <Badge tone={g.botInstalled ? 'success' : 'neutral'}>{g.botInstalled ? 'Bot added' : 'Not added'}</Badge>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-            {g.botInstalled ? (
-              <Link href={`/dashboard/${g.id}/welcome`} className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'mt-auto w-full')}>
-                Configure <ArrowRight />
-              </Link>
-            ) : (
-              <a href={g.inviteUrl ?? '#'} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-auto w-full')}>
-                <Plus /> Add DexbotX
-              </a>
-            )}
-          </Card>
-        ))}
+                {g.botInstalled ? (
+                  <Link prefetch href={`/dashboard/${g.id}/welcome`} className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'mt-auto w-full')}>
+                    Configure <ArrowRight />
+                  </Link>
+                ) : (
+                  <a href={g.inviteUrl ?? '#'} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-auto w-full')}>
+                    <Plus /> Add DexBotX
+                  </a>
+                )}
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
 
       {visibleGuilds && visibleGuilds.length === 0 && (
@@ -154,16 +163,13 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="h-36" />
-          ))}
-        </div>
-      }
-    >
-      <DashboardContent />
-    </Suspense>
+    <>
+      <SiteHeader />
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+        <Suspense fallback={null}>
+          <DashboardContent />
+        </Suspense>
+      </main>
+    </>
   );
 }
