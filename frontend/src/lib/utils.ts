@@ -11,6 +11,12 @@ export function initials(name: string): string {
   return letters.map((p) => Array.from(p)[0]?.toUpperCase() ?? '').join('') || '?';
 }
 
-export function loginUrl(returnTo: string): string {
-  return `/api/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
+export function hasLoginHintCookie(): boolean {
+  return typeof document !== 'undefined' && document.cookie.split(';').some((cookie) => cookie.trim() === 'dbx_li=1');
+}
+
+export function clearLoginHintCookie(): void {
+  if (typeof document === 'undefined') return;
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `dbx_li=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
 }

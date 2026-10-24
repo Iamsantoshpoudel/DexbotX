@@ -53,6 +53,26 @@ export class SessionService {
     await this.redis.client.del(this.key(sid));
   }
 
+  async findActiveForUser(userId: string): Promise<SessionData | null> {
+    let cursor = '0';
+    do {
+      const [next, keys] = await this.redis.client.scan(cursor, 'MATCH', 'sess:*', 'COUNT', 200);
+      cursor = next;
+      if (keys.length === 0) continue;
+      const values = await this.redis.client.mget(...keys);
+      for (const raw of values) {
+        if (!raw) continue;
+        try {
+          const session = JSON.parse(raw) as SessionData;
+          if (session.userId === userId && session.expiresAt > Date.now()) return session;
+        } catch {
+          continue;
+        }
+      }
+    } while (cursor !== '0');
+    return null;
+  }
+
   accessToken(session: SessionData): string {
     return decrypt(session.accessTokenEnc, this.config.sessionKey);
   }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { DashboardTopBar } from '@/components/dashboard/top-bar';
 import { Sidebar } from '@/components/dashboard/sidebar';
 import { buttonVariants } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { errorMessage, errorStatus } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useGetGuildQuery, useRefreshGuildMutation } from '@/store/api';
+import { connect, getRealtimeStatus, subscribeRealtimeStatus } from '@/lib/realtime';
+import { useAppDispatch } from '@/store/hooks';
 
 function formatLastSynced(timestamp: string | null, now: number): string {
   if (!timestamp) return 'Last synced not yet';
@@ -21,6 +23,8 @@ function formatLastSynced(timestamp: string | null, now: number): string {
 export default function GuildLayout({ children }: { children: ReactNode }) {
   const { guildId } = useParams<{ guildId: string }>();
   const pathname = usePathname();
+  const dispatch = useAppDispatch();
+  const realtimeStatus = useSyncExternalStore(subscribeRealtimeStatus, getRealtimeStatus, () => 'reconnecting' as const);
   const [giveUp404, setGiveUp404] = useState(false);
   const [poll404, setPoll404] = useState(false);
   const [cooldownUntil, setCooldownUntil] = useState(0);
@@ -30,6 +34,8 @@ export default function GuildLayout({ children }: { children: ReactNode }) {
   const cooldownSeconds = Math.max(0, Math.ceil((cooldownUntil - now) / 1000));
   const cooldownActive = cooldownSeconds > 0;
   const notFound = errorStatus(error) === 404;
+
+  useEffect(() => connect(guildId, dispatch), [dispatch, guildId]);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), cooldownActive ? 1000 : 60_000);
@@ -82,7 +88,7 @@ export default function GuildLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="fade-up">
-      <DashboardTopBar guildId={guildId} guild={data?.guild} lastSyncedLabel={data ? formatLastSynced(data.guild.lastSyncedAt, now) : undefined} refreshing={refreshing} cooldownSeconds={cooldownSeconds} onRefresh={onRefresh} />
+      <DashboardTopBar guildId={guildId} guild={data?.guild} lastSyncedLabel={data ? formatLastSynced(data.guild.lastSyncedAt, now) : undefined} refreshing={refreshing} cooldownSeconds={cooldownSeconds} onRefresh={onRefresh} realtimeStatus={realtimeStatus} />
       <div className="flex min-h-[calc(100dvh-3.5rem)]">
         <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-64 shrink-0 overflow-y-auto border-r border-border bg-surface lg:block">
           <Sidebar guild={data?.guild} guildId={guildId} pathname={pathname} lastSyncedLabel={data ? formatLastSynced(data.guild.lastSyncedAt, now) : undefined} />

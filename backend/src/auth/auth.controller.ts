@@ -44,6 +44,11 @@ export class AuthController {
     try {
       const { sid, ttlSeconds, returnTo } = await this.auth.finishLogin(code, state, req.cookies?.[stateCookie]);
       res.cookie(sessionCookieName(this.config), sid, cookieOptions(this.config, ttlSeconds));
+      res.cookie('dbx_li', '1', {
+        ...cookieOptions(this.config, ttlSeconds),
+        domain: undefined,
+        httpOnly: false,
+      });
       return res.redirect(302, `${web}${returnTo}`);
     } catch {
       return res.redirect(302, `${web}/?error=login_failed`);
@@ -56,6 +61,12 @@ export class AuthController {
   async logout(@Req() req: AuthedRequest, @Res({ passthrough: true }) res: Response): Promise<void> {
     if (req.sid) await this.auth.logout(req.sid);
     res.clearCookie(sessionCookieName(this.config), { ...cookieOptions(this.config, 0), maxAge: undefined });
+    res.clearCookie('dbx_li', {
+      ...cookieOptions(this.config, 0),
+      domain: undefined,
+      maxAge: undefined,
+      httpOnly: false,
+    });
   }
 
   @Get('me')

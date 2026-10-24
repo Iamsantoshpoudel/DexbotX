@@ -46,9 +46,10 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-medium text-foreground">Sessions and storage</h2>
             <p className="mt-2">
               Login sessions are stored server-side and expire automatically. The Discord access token is encrypted
-              before it is stored. The browser receives an HTTP-only session cookie. We use Redis for sessions and
-              short-lived caches, Supabase Postgres for configuration and server records, and Supabase Storage for
-              uploaded backgrounds when that feature is configured.
+              before it is stored. The browser receives an HTTP-only session cookie and a non-secret,
+              JavaScript-readable login hint cookie used to avoid unnecessary session lookups for logged-out visitors.
+              We use Redis for sessions and short-lived caches, Supabase Postgres for configuration and server records,
+              and Supabase Storage for uploaded backgrounds when that feature is configured.
             </p>
           </section>
           <section>

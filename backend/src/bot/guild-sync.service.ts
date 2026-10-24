@@ -18,7 +18,7 @@ import { RedisService } from '../redis/redis.service';
 import { SettingsCache } from '../redis/settings-cache.service';
 import { StatsService } from '../admin/stats.service';
 
-const CHANNELS_TTL_SECONDS = 12 * 60;
+const CHANNELS_TTL_SECONDS = 60 * 60;
 const ROLES_TTL_SECONDS = 12 * 60;
 const META_TTL_SECONDS = 15 * 60;
 const REFRESH_COOLDOWN_SECONDS = 30;
@@ -96,6 +96,7 @@ export class GuildSyncService {
   async upsert(g: Guild): Promise<void> {
     await this.upsertMany([g]);
     await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, g.id);
+    await this.publishGuildEvent(g.id, 'installed', 'joined', {});
     await this.stats.incr('guild_joins');
   }
 
@@ -112,6 +113,7 @@ export class GuildSyncService {
     if (updated.length > 0) {
       await this.redis.client.del(guildMetaCacheKey(guildId));
       await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, guildId);
+      await this.publishGuildEvent(guildId, 'installed', 'left', {});
       await this.stats.incr('guild_leaves');
     }
   }
@@ -261,12 +263,14 @@ export class GuildSyncService {
           position: sql`excluded.position`,
         },
       });
-    await this.invalidateChannels(guildId);
+    await this.invalidateChannels(guildId, channel.id);
+    await this.publishGuildEvent(guildId, 'channels', 'updated', { channelId: channel.id });
   }
 
   async deleteChannel(guildId: string, channelId: string): Promise<void> {
     await this.database.db.delete(guildChannels).where(and(eq(guildChannels.guildId, guildId), eq(guildChannels.id, channelId)));
-    await this.invalidateChannels(guildId);
+    await this.invalidateChannels(guildId, channelId);
+    await this.publishGuildEvent(guildId, 'channels', 'deleted', { channelId });
   }
 
   async upsertRole(
@@ -287,11 +291,13 @@ export class GuildSyncService {
         set: { name: sql`excluded.name`, color: sql`excluded.color`, position: sql`excluded.position` },
       });
     await this.invalidateRoles(guildId);
+    await this.publishGuildEvent(guildId, 'roles', 'updated', { roleId: role.id });
   }
 
   async deleteRole(guildId: string, roleId: string): Promise<void> {
     await this.database.db.delete(guildRoles).where(and(eq(guildRoles.guildId, guildId), eq(guildRoles.id, roleId)));
     await this.invalidateRoles(guildId);
+    await this.publishGuildEvent(guildId, 'roles', 'deleted', { roleId });
   }
 
   async guildUpdated(g: Guild): Promise<void> {
@@ -299,14 +305,32 @@ export class GuildSyncService {
     await this.redis.client.del(guildMetaCacheKey(g.id));
   }
 
-  private async invalidateChannels(guildId: string): Promise<void> {
-    await this.redis.client.del(guildChannelsCacheKey(guildId));
+  private async invalidateChannels(guildId: string, channelId?: string): Promise<void> {
+    const keys = [guildChannelsCacheKey(guildId), `discord:cache:channels:${guildId}`];
+    if (channelId) keys.push(`chan:${channelId}`);
+    await this.redis.client.del(...keys);
     await this.redis.client.publish(GUILD_CHANNELS_CHANGED_CHANNEL, guildId);
   }
 
   private async invalidateRoles(guildId: string): Promise<void> {
     await this.redis.client.del(guildRolesCacheKey(guildId));
     await this.redis.client.publish(GUILD_ROLES_CHANGED_CHANNEL, guildId);
+  }
+
+  private async publishGuildEvent(
+    guildId: string,
+    kind: 'channels' | 'roles' | 'installed',
+    type: string,
+    data: Record<string, string>,
+  ): Promise<void> {
+    const rev = await this.redis.client.incr(`guild:${guildId}:rev`);
+    await this.redis.client.publish(`guild:${guildId}:events`, JSON.stringify({
+      type,
+      guildId,
+      kind,
+      data,
+      rev,
+    }));
   }
 
   private async withRateLimitBackoff<T>(request: () => Promise<T>): Promise<T> {

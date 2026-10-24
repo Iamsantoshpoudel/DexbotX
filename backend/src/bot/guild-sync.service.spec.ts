@@ -67,6 +67,7 @@ function makeService() {
     set: jest.fn(async (..._args: unknown[]) => 'OK' as string | null),
     del: jest.fn(async (..._args: unknown[]) => 1),
     publish: jest.fn(async (..._args: unknown[]) => 1),
+    incr: jest.fn(async (..._args: unknown[]) => 1),
   };
   const redis = { client: redisClient } as unknown as RedisService;
   const discord = {
@@ -103,7 +104,7 @@ describe('GuildSyncService', () => {
     expect(discord.getGuildRoles).toHaveBeenCalledWith('guild-123');
     expect(inserts.map(({ table }) => table)).toEqual(expect.arrayContaining([guildChannels, guildRoles]));
     expect(deletes.map(({ table }) => table)).toEqual(expect.arrayContaining([guildChannels, guildRoles]));
-    expect(redisClient.set).toHaveBeenCalledWith(guildChannelsCacheKey('guild-123'), JSON.stringify(result.channels), 'EX', 720);
+    expect(redisClient.set).toHaveBeenCalledWith(guildChannelsCacheKey('guild-123'), JSON.stringify(result.channels), 'EX', 3600);
     expect(redisClient.publish).toHaveBeenCalledWith(GUILD_SYNCED_CHANNEL, 'guild-123');
   });
 
@@ -117,11 +118,14 @@ describe('GuildSyncService', () => {
   });
 
   it('records guild joins and leaves', async () => {
-    const { service, stats } = makeService();
+    const { service, stats, redisClient } = makeService();
     await service.upsert({ id: 'guild-123' } as never);
     await service.markLeft('guild-123');
     expect(stats.incr).toHaveBeenCalledWith('guild_joins');
     expect(stats.incr).toHaveBeenCalledWith('guild_leaves');
+    expect(redisClient.incr).toHaveBeenCalledTimes(2);
+    expect(redisClient.incr).toHaveBeenNthCalledWith(1, 'guild:guild-123:rev');
+    expect(redisClient.incr).toHaveBeenNthCalledWith(2, 'guild:guild-123:rev');
   });
 
   it('invalidates the exact channel key after an incremental channel write', async () => {
@@ -135,8 +139,23 @@ describe('GuildSyncService', () => {
       parent_id: null,
     });
 
-    expect(redisClient.del).toHaveBeenCalledWith(guildChannelsCacheKey('guild-123'));
+    expect(redisClient.del).toHaveBeenCalledWith(
+      guildChannelsCacheKey('guild-123'),
+      `discord:cache:channels:guild-123`,
+      'chan:channel-new',
+    );
     expect(redisClient.publish).toHaveBeenCalledWith(GUILD_CHANNELS_CHANGED_CHANNEL, 'guild-123');
+    expect(redisClient.incr).toHaveBeenCalledWith('guild:guild-123:rev');
+    expect(redisClient.publish).toHaveBeenCalledWith(
+      'guild:guild-123:events',
+      JSON.stringify({
+        type: 'updated',
+        guildId: 'guild-123',
+        kind: 'channels',
+        data: { channelId: 'channel-new' },
+        rev: 1,
+      }),
+    );
   });
 
   it('uses a safe position when a role-create event has no position yet', async () => {

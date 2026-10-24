@@ -1,21 +1,15 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useEffect } from 'react';
-import { notFound, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { Card, Skeleton } from '@/components/ui/misc';
 import { errorMessage, errorStatus } from '@/lib/errors';
-import { loginUrl } from '@/lib/utils';
 import { useGetAdminMeQuery } from '@/store/adminApi';
 
 export function AdminGate({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const { data, error, isLoading, refetch } = useGetAdminMeQuery();
   const status = errorStatus(error);
-
-  useEffect(() => {
-    if (status === 401) router.replace(loginUrl('/admin'));
-  }, [router, status]);
 
   if (status === 404) {
     // The backend deliberately returns the same not-found response for unknown routes and non-admin users.
@@ -32,7 +26,12 @@ export function AdminGate({ children }: { children: ReactNode }) {
     );
   }
   if (status === 401) {
-    return <div role="status" className="p-8 text-center text-sm text-muted-foreground">Redirecting to sign in…</div>;
+    return (
+      <div role="status" className="p-8 text-center text-sm text-muted-foreground">
+        Your session has expired.{' '}
+        <a href="/api/auth/login?returnTo=/admin" className="text-primary underline underline-offset-4">Sign in again</a>
+      </div>
+    );
   }
   if (data) return children;
   return (

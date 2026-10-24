@@ -64,13 +64,19 @@ export const metadata: Metadata = {
   other: { 'theme-color': '#8ab4f8', 'color-scheme': 'dark light' },
 };
 
+const isVercelDeployment = process.env.VERCEL === '1';
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body suppressHydrationWarning className="min-h-dvh font-sans antialiased">
         <Providers>{children}</Providers>
-        <Analytics />
-        <SpeedInsights />
+        {isVercelDeployment && (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        )}
       </body>
     </html>
   );

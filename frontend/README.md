@@ -25,12 +25,13 @@ Open `http://localhost:3000`. By default the API proxy targets `http://localhost
 | Variable | Purpose |
 |---|---|
 | `BACKEND_URL` | Backend origin used by the `/api/*` proxy and Next.js rewrites. Defaults to `http://localhost:4000` in development. |
+| `NEXT_PUBLIC_WS_ORIGIN` | Public `ws://` or `wss://` origin allowed by the Content Security Policy for native dashboard updates. Defaults to the corresponding WebSocket origin for `BACKEND_URL`. |
 | `NEXT_PUBLIC_SITE_URL` | Public website origin used for canonical URLs and Open Graph metadata. |
 | `NEXT_PUBLIC_GITHUB_URL` | Public project/creator GitHub link in metadata. |
 | `NEXT_PUBLIC_DISCORD_SERVER_URL` | Public Discord community invite. |
 | `NEXT_PUBLIC_BANNER_GIF` | Public banner image path or absolute URL for social metadata. |
 
-For Vercel, set **Root Directory** to `frontend`. Configure `BACKEND_URL` to the HTTPS backend origin and `NEXT_PUBLIC_SITE_URL` to the deployed website URL. The `NEXT_PUBLIC_*` values are public and must never contain credentials.
+For Vercel, set **Root Directory** to `frontend`. Configure `BACKEND_URL` to the HTTPS backend origin, `NEXT_PUBLIC_WS_ORIGIN` to the matching public `wss://` origin, and `NEXT_PUBLIC_SITE_URL` to the deployed website URL. The `NEXT_PUBLIC_*` values are public and must never contain credentials.
 
 ## Routes
 
@@ -75,4 +76,5 @@ Run these from `frontend/`:
 - The proxy forwards requests to `BACKEND_URL`; production requires HTTPS except local/Compose backends.
 - Admin authorization is enforced by the backend, and the admin layout is marked `noindex`.
 - API responses are not cached by the Next.js proxy. RTK Query retains and refreshes data according to each endpoint's usage.
+- The server configuration pages use one native WebSocket per tab, authenticated with a short-lived ticket from `/api/ws/ticket`. Channel events refresh the open server's channel list from the API cache; reconnects perform one channel-list revalidation. The socket is paused after a tab remains hidden for 60 seconds.
 - `src/app/robots.ts` disallows crawling `/api`, `/dashboard`, and `/admin`.

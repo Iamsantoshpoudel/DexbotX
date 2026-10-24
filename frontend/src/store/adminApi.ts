@@ -15,6 +15,9 @@ export const adminApi = createApi({
   reducerPath: 'adminApi',
   tagTypes: ['AdminGuilds', 'AdminGuild', 'AdminFailures', 'AdminUsers', 'AdminContent', 'AdminFlags', 'AdminAudit'],
   baseQuery: fetchBaseQuery({ baseUrl: '/api', credentials: 'same-origin' }),
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
+  refetchOnMountOrArgChange: false,
   endpoints: (build) => ({
     getAdminMe: build.query<{ admin: true }, void>({
       query: () => '/admin/me',

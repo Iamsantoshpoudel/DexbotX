@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { TemplatesController } from './templates.controller';
+import { PresetsController, TemplatesController } from './templates.controller';
 
-@Module({ controllers: [TemplatesController] })
+@Module({ controllers: [TemplatesController, PresetsController] })
 export class TemplatesModule {}

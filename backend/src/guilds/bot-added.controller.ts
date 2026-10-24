@@ -28,7 +28,7 @@ export class BotAddedController {
       return res.redirect(302, `${web}/dashboard`);
     }
     if (!req.session) {
-      return res.redirect(302, `${web}/api/auth/login?returnTo=${encodeURIComponent(`/dashboard/${id}/welcome`)}`);
+      return res.redirect(302, `${web}/`);
     }
     try {
       await this.guilds.forgetUserGuilds(req.session.userId);

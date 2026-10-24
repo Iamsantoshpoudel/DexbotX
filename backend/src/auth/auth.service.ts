@@ -34,7 +34,6 @@ export class AuthService {
       response_type: 'code',
       scope: 'identify guilds',
       state,
-      prompt: 'none',
     });
     return { url: `https://discord.com/oauth2/authorize?${params}`, state };
   }

@@ -11,6 +11,8 @@ const envSchema = z.object({
 
   /** Public origin of the dashboard, e.g. https://dexbotx.app (no trailing slash needed). */
   WEB_URL: z.string().url(),
+  /** Public native WebSocket endpoint exposed by the API. */
+  WS_PUBLIC_URL: z.string().url().default('ws://localhost:4000/ws'),
   /** Number of reverse proxies in front of the API (see .env.example). */
   TRUST_PROXY: z.string().default('1'),
 
@@ -61,6 +63,9 @@ const envSchema = z.object({
       message: 'must be a public HTTPS dashboard URL in production',
     });
   }
+  if (new URL(config.WS_PUBLIC_URL).protocol !== 'wss:') {
+    ctx.addIssue({ code: 'custom', path: ['WS_PUBLIC_URL'], message: 'must use wss:// in production' });
+  }
 });
 
 export interface AppConfig {
@@ -69,6 +74,7 @@ export interface AppConfig {
   port: number;
   logLevel: string;
   webOrigin: string;
+  wsPublicUrl: string;
   redirectUri: string;
   inviteRedirectUri: string;
   cookieSecure: boolean;
@@ -117,6 +123,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: e.PORT,
     logLevel: e.LOG_LEVEL,
     webOrigin,
+    wsPublicUrl: e.WS_PUBLIC_URL,
     redirectUri: `${webOrigin}/api/auth/callback`,
     inviteRedirectUri: `${webOrigin}/api/bot/added`,
     cookieSecure: isProd || webOrigin.startsWith('https://'),

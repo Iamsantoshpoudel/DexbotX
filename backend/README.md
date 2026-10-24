@@ -51,6 +51,8 @@ See `.env.example`. Required: `WEB_URL`, `DATABASE_URL`, `REDIS_URL`, `DISCORD_C
 
 `ADMIN_USER_IDS` is a comma-separated list of Discord user IDs (17–20 digits) allowed into the admin console, for example `123456789012345678,234567890123456789`. It defaults to empty, which disables admin access for everyone. Configure it only on backend processes; frontend state is never used to authorize admin requests.
 
+`WS_PUBLIC_URL` is the public native WebSocket endpoint returned by `POST /ws/ticket` (for example `wss://api.example.com/ws`). The endpoint requires an authenticated dashboard session; tickets are single-use and expire after 30 seconds. In production, configure a public `wss://` URL and ensure the API host/proxy accepts WebSocket upgrades.
+
 ## Production on Render
 
 For the production dashboard at `https://dexbotx.vercel.app` and API at `https://dexbotx-zq8g.onrender.com`:
@@ -79,7 +81,7 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 | POST | `/guilds/:guildId/messages/:kind/preview` | renders a real PNG using the user's avatar |
 | POST | `/guilds/:guildId/assets/background` | multipart field `file`; validated and re-encoded to JPEG (2 MB cap, decompression-bomb safe), stored privately; returns a `path` for `image.backgroundPath` |
 | POST | `/guilds/:guildId/messages/:kind/test` | posts a test message; explains missing channel permissions instead of failing silently |
-| GET | `/templates/presets` | public, cacheable preset templates |
+| GET | `/templates/presets` | public, immutable 24-hour cache of preset templates |
 | GET | `/flags` | public, cached flag endpoint exposing only `maintenance` |
 | GET | `/health` · `/health/ready` | liveness and readiness (database + Redis) |
 | GET | `/metrics` | Prometheus; needs `Authorization: Bearer $METRICS_TOKEN`, disabled when unset |
@@ -120,6 +122,7 @@ Feature flags are `maintenance` (boolean), `musicEnabled` (boolean), `socialEnab
 - **CSRF:** state-changing requests must carry the dashboard `Origin`/`Referer`; anything else is rejected.
 - **Rate limits:** Redis sliding counters per user (per IP when anonymous), stricter on login, preview and test sends.
 - **Live server list:** bot join/leave events are published through Redis Pub/Sub and delivered over the authenticated `/events/guilds` stream; the dashboard refreshes the active guild list only when membership changes, without periodic polling.
+- **Live dashboard updates:** `POST /ws/ticket` issues a short-lived, single-use ticket for the native `/ws` endpoint. The API checks the dashboard Origin and active session, limits each user to five connections, authorizes guild-room joins, and forwards sanitized guild events from Redis Pub/Sub.
 - **Settings writes:** the settings upsert and audit-log entry are one Postgres transaction; `DELETE /guilds/:guildId/messages/:kind` resets only that message type to defaults. Redis caches are invalidated after the transaction commits.
 - **Client metadata cache:** the frontend persists only validated server/channel display metadata in user-scoped local storage for up to seven days. It still fetches the API on entry/refresh, and bot membership/channel events invalidate the active query. Message settings are never persisted in browser storage.
 - **Output safety:** user-controlled names are markdown-escaped, `@everyone`/`@here` are defused, and bot messages use restricted `allowed_mentions`. The bot never posts to a channel that is not in the member's own server.
@@ -129,7 +132,7 @@ Feature flags are `maintenance` (boolean), `musicEnabled` (boolean), `socialEnab
 - Sharding: `SHARD_COUNT=auto` (Discord recommends the count; required from 2,500 servers). Each shard is a process; run the manager on one host or split by shard ids later.
 - The API is stateless: run N replicas behind a load balancer. Sessions, rate limits and the config cache are in Redis; config changes reach the bot's in-process cache through Redis pub/sub.
 - Welcome cards are rendered by workers: `WORKER_CONCURRENCY` jobs per process, a global 40 jobs/s limiter, 5 attempts with exponential backoff, and `docker compose up -d --scale worker=3` to add capacity. A join raid queues up instead of exhausting shard CPU.
-- Metrics: `dexbotx_http_request_duration_seconds`, `dexbotx_member_events_total` and `dexbotx_queue_jobs` (plus default process metrics). Set `WORKER_METRICS_PORT` to scrape workers too.
+- Metrics: `dexbotx_http_request_duration_seconds`, `dexbotx_discord_rest_calls`, `dexbotx_member_events_total` and `dexbotx_queue_jobs` (plus default process metrics). Discord REST calls are counted in shared Redis by method and normalized route. Set `WORKER_METRICS_PORT` to scrape workers too.
 
 ## Tests
 ```bash

@@ -22,6 +22,13 @@ if (!isDev && backendUrl.protocol !== 'https:' && !isComposeBackend && !isLoopba
   throw new Error('BACKEND_URL must use HTTPS in production');
 }
 
+const defaultWsOrigin = `${backendUrl.protocol === 'https:' ? 'wss:' : 'ws:'}//${backendUrl.host}`;
+const configuredWsOrigin = (process.env.NEXT_PUBLIC_WS_ORIGIN ?? defaultWsOrigin).trim();
+const wsUrl = new URL(configuredWsOrigin);
+if (!['ws:', 'wss:'].includes(wsUrl.protocol) || wsUrl.username || wsUrl.password) {
+  throw new Error('NEXT_PUBLIC_WS_ORIGIN must be a WebSocket origin without embedded credentials');
+}
+
 const csp = [
   "default-src 'self'",
   // Next.js injects inline bootstrap scripts; a nonce-based CSP would force every page to render dynamically.
@@ -29,7 +36,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://cdn.discordapp.com",
   "font-src 'self' data:",
-  `connect-src 'self'${isDev ? ' ws:' : ''}`,
+  `connect-src 'self' ${wsUrl.origin}${isDev ? ' ws:' : ''}`,
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -67,6 +74,8 @@ const nextConfig = {
       { source: '/:path*', headers: securityHeaders },
       // Never let a CDN or browser cache API responses (they are per-user).
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
+      { source: '/api/presets', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, immutable' }] },
+      { source: '/api/templates/presets', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, immutable' }] },
     ];
   },
 };

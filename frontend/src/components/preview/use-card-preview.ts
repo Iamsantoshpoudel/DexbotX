@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getCard, getCardEtag, putCard, releaseCard, retainCard } from '@/lib/card-cache';
 import type { ImageConfig, MessageKind } from '@/lib/types';
-import { loginUrl } from '@/lib/utils';
 
 interface PreviewState {
   url: string | null;
@@ -95,7 +94,7 @@ export function useCardPreview(
               signal: controller.signal,
             });
             if (res.status === 401) {
-              window.location.assign(loginUrl(window.location.pathname));
+              if (active) setState((current) => ({ ...current, loading: false, error: 'Your session has expired. Sign in to continue.' }));
               return;
             }
             if (res.status === 304) {
@@ -113,7 +112,7 @@ export function useCardPreview(
               });
             }
             if (res.status === 401) {
-              window.location.assign(loginUrl(window.location.pathname));
+              if (active) setState((current) => ({ ...current, loading: false, error: 'Your session has expired. Sign in to continue.' }));
               return;
             }
             if (!res.ok) throw new Error(res.status === 429 ? 'Preview paused: too many updates. Wait a moment.' : 'Preview unavailable right now.');

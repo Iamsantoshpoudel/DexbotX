@@ -25,6 +25,7 @@ import { APP_CONFIG } from '../src/core/config';
 import { SessionService } from '../src/auth/session.service';
 import { WelcomeService } from '../src/welcome/welcome.service';
 import { DiscordRestService } from '../src/discord/discord-rest.service';
+import { MetricsService } from '../src/metrics/metrics.service';
 import { GuildsService } from '../src/guilds/guilds.service';
 import { messageConfigSchema } from '../src/shared/message-config';
 
@@ -338,11 +339,16 @@ describe('DexBotX API', () => {
 
   it('serves presets publicly with cache headers', async () => {
     const res = await http().get('/templates/presets').expect(200);
-    expect(res.headers['cache-control']).toContain('max-age=3600');
+    expect(res.headers['cache-control']).toContain('max-age=86400');
+    expect(res.headers['cache-control']).toContain('immutable');
     expect(res.headers.etag).toBeTruthy();
     expect(res.headers['server-timing']).toMatch(/^app;dur=/);
     expect(res.body.presets.length).toBeGreaterThanOrEqual(10);
     await http().get('/templates/presets').set('If-None-Match', res.headers.etag).expect(304);
+    await http().get('/presets').expect(200).expect(({ headers }) => {
+      expect(headers['cache-control']).toContain('max-age=86400');
+      expect(headers['cache-control']).toContain('immutable');
+    });
   });
 
   it('sets security headers', async () => {
@@ -365,6 +371,8 @@ describe('DexBotX API', () => {
     await http().get('/auth/me').expect(401);
     await http().get('/guilds').expect(401);
     await http().get(`/guilds/${G1}`).expect(401);
+    const added = await http().get(`/bot/added?guild_id=${G1}`).expect(302);
+    expect(added.headers.location).toBe(`${WEB}/`);
   });
 
   it('completes the Discord OAuth flow with a bound, single-use state', async () => {
@@ -372,6 +380,7 @@ describe('DexBotX API', () => {
     const location = new URL(login.headers.location);
     expect(location.origin + location.pathname).toBe('https://discord.com/oauth2/authorize');
     expect(location.searchParams.get('scope')).toBe('identify guilds');
+    expect(location.searchParams.has('prompt')).toBe(false);
     expect(location.searchParams.get('redirect_uri')).toBe(`${WEB}/api/auth/callback`);
     const state = location.searchParams.get('state')!;
     const stateCookie = cookieFrom(login, 'dexbotx_oauth')!;
@@ -388,6 +397,11 @@ describe('DexBotX API', () => {
     const setCookie = (ok.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('dexbotx_sid='))!;
     expect(setCookie).toMatch(/HttpOnly/i);
     expect(setCookie).toMatch(/SameSite=Lax/i);
+    const loginHintCookie = (ok.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('dbx_li='))!;
+    expect(loginHintCookie).toContain('dbx_li=1');
+    expect(loginHintCookie).not.toMatch(/HttpOnly/i);
+    expect(loginHintCookie).toMatch(/SameSite=Lax/i);
+    expect(loginHintCookie.match(/Max-Age=(\d+)/i)?.[1]).toBe(setCookie.match(/Max-Age=(\d+)/i)?.[1]);
 
     // state is single-use
     const replay = await http().get(`/auth/callback?code=abc&state=${state}`).set('Cookie', stateCookie).expect(302);
@@ -409,6 +423,46 @@ describe('DexBotX API', () => {
     const res = await http().get('/auth/me').set(authed()).expect(200);
     expect(res.body).toMatchObject({ id: USER_ID, username: 'tester', globalName: 'Test Er', isAdmin: false });
     expect(res.body.avatarUrl).toContain('cdn.discordapp.com');
+  });
+
+  it('avoids repeated Discord REST calls for cached user, guild, channel and preset reads', async () => {
+    const redis = app.get(RedisService).client;
+    const testSession = await app.get(SessionService).create(
+      { id: USER_ID, username: 'tester', global_name: 'Test Er', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const requestHeaders = { Cookie: `dexbotx_sid=${testSession.sid}`, Origin: WEB };
+    await redis.del('stat:discord-rest-calls');
+    discordCalls.length = 0;
+    await redis.del(`ug:${USER_ID}`, `guild:${G1}:channels`);
+
+    for (let i = 0; i < 10; i++) {
+      await http().get('/auth/me').set(requestHeaders).expect(200);
+      await http().get(`/guilds/${G1}`).set(requestHeaders).expect(200);
+      await http().get(`/guilds/${G1}/channels`).set(requestHeaders).expect(200);
+      await http().get('/presets').expect(200);
+    }
+
+    expect(discordCalls.filter((call) => call.path.startsWith('/users/@me/guilds'))).toHaveLength(1);
+    expect(discordCalls).toHaveLength(1);
+    expect(await redis.ttl(`guild:${G1}:channels`)).toBeGreaterThan(3500);
+    const metrics = await app.get(MetricsService).render();
+    expect(metrics).toContain('dexbotx_discord_rest_calls{method="GET",route="/users/@me/guilds"} 1');
+  });
+
+  it('creates a short-lived authenticated one-use WebSocket ticket', async () => {
+    const response = await http().post('/ws/ticket').set(authed()).expect(201);
+    expect(response.body.ticket).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const url = new URL(response.body.url);
+    expect(url.origin).toBe(new URL(app.get(APP_CONFIG).wsPublicUrl).origin);
+    expect(url.pathname).toBe('/ws');
+    expect(url.searchParams.get('ticket')).toBe(response.body.ticket);
+
+    const redis = app.get(RedisService).client;
+    expect(await redis.get(`wsticket:${response.body.ticket}`)).toBe(USER_ID);
+    expect(await redis.ttl(`wsticket:${response.body.ticket}`)).toBeGreaterThan(0);
+    expect(await redis.getdel(`wsticket:${response.body.ticket}`)).toBe(USER_ID);
+    expect(await redis.getdel(`wsticket:${response.body.ticket}`)).toBeNull();
   });
 
   it('hides admin routes from logged-out users and non-admin sessions', async () => {
@@ -1013,7 +1067,8 @@ describe('DexBotX API', () => {
   it('logs out, destroys the session and revokes the token', async () => {
     discordCalls.length = 0;
     await http().post('/auth/logout').set({ Cookie: sessionCookie }).expect(403); // CSRF applies here too
-    await http().post('/auth/logout').set(authed()).expect(204);
+    const logout = await http().post('/auth/logout').set(authed()).expect(204);
+    expect((logout.headers['set-cookie'] as unknown as string[]).some((c) => /^dbx_li=;/.test(c) && /Expires=/i.test(c))).toBe(true);
     await http().get('/auth/me').set({ Cookie: sessionCookie }).expect(401);
     await new Promise((r) => setTimeout(r, 100));
     expect(discordCalls.some((c) => c.path === '/oauth2/token/revoke')).toBe(true);

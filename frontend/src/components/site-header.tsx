@@ -6,19 +6,30 @@ import { buttonVariants } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserMenu } from '@/components/user-menu';
-import { cn, loginUrl } from '@/lib/utils';
+import { clearLoginHintCookie, cn, hasLoginHintCookie } from '@/lib/utils';
 import { useGetMeQuery } from '@/store/api';
+import { useEffect, useState } from 'react';
 
 export function SiteHeader() {
   const pathname = usePathname();
-  const { data: me, isLoading } = useGetMeQuery();
+  const [hasLoginHint, setHasLoginHint] = useState(false);
+  useEffect(() => setHasLoginHint(hasLoginHintCookie()), []);
+  const { data: me, isLoading, error } = useGetMeQuery(undefined, { skip: !hasLoginHint });
+
+  useEffect(() => {
+    if (error && 'status' in error && error.status === 401) {
+      clearLoginHintCookie();
+      setHasLoginHint(false);
+    }
+  }, [error]);
+
   return (
     <header className="sticky top-0 z-20 border-b border-border/60 bg-background/70 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Logo />
         <nav aria-label="Main" className="flex items-center gap-2">
           <ThemeToggle />
-          {isLoading && !pathname.startsWith('/dashboard') ? (
+          {hasLoginHint && isLoading && !pathname.startsWith('/dashboard') ? (
             <div className="h-9 w-28 animate-pulse rounded-full bg-muted" />
           ) : me ? (
             <>
@@ -28,8 +39,7 @@ export function SiteHeader() {
               <UserMenu me={me} />
             </>
           ) : (
-            // A plain link, not next/link: this is a server redirect to Discord, not a client route.
-            <a href={loginUrl('/dashboard')} className={cn(buttonVariants({ size: 'sm' }))}>
+            <a href="/api/auth/login?returnTo=/dashboard" className={cn(buttonVariants({ size: 'sm' }))}>
               Log in with Discord
             </a>
           )}

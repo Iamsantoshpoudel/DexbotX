@@ -54,6 +54,28 @@ export class StatsService {
     });
   }
 
+  async recordDiscordRestCall(method: string, route: string): Promise<void> {
+    const field = JSON.stringify([method, route]);
+    await this.record('record Discord REST call', async () => {
+      await this.redis.client.hincrby('stat:discord-rest-calls', field, 1);
+    });
+  }
+
+  async discordRestCalls(): Promise<Array<{ method: string; route: string; count: number }>> {
+    const entries = await this.redis.client.hgetall('stat:discord-rest-calls');
+    return Object.entries(entries).flatMap(([field, value]) => {
+      try {
+        const parsed: unknown = JSON.parse(field);
+        if (!Array.isArray(parsed) || parsed.length !== 2 || typeof parsed[0] !== 'string' || typeof parsed[1] !== 'string') return [];
+        const count = Number(value);
+        if (!Number.isSafeInteger(count) || count < 0) return [];
+        return [{ method: parsed[0], route: parsed[1], count }];
+      } catch {
+        return [];
+      }
+    });
+  }
+
   async addUnique(name: string, id: string): Promise<void> {
     const dailyKey = `stat:uniq:${name}:${new Date().toISOString().slice(0, 10)}`;
     const allKey = `stat:uniq:${name}:all`;

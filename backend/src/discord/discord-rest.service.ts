@@ -11,6 +11,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function normalizeRoute(path: string): string {
+  return path.split('?')[0].replace(/\/\d{17,20}(?=\/|$)/g, '/:id');
+}
+
 export class DiscordApiError extends Error {
   constructor(
     readonly status: number,
@@ -84,6 +88,7 @@ export class DiscordRestService {
   ) {}
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
+    await this.stats.recordDiscordRestCall((init.method ?? 'GET').toUpperCase(), normalizeRoute(path));
     const res = await fetch(`${API}${path}`, {
       ...init,
       headers: { 'User-Agent': USER_AGENT, ...(init.headers ?? {}) },
@@ -93,6 +98,7 @@ export class DiscordRestService {
     if ([401, 403, 404, 429].includes(res.status)) {
       await this.stats.incr(`d_${res.status}`);
     }
+
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     let body: unknown;
@@ -207,7 +213,7 @@ export class DiscordRestService {
 
     const channels = await this.request<DiscordChannel[]>(`/guilds/${guildId}/channels`, { headers: this.bot() });
     try {
-      await this.redis.client.set(key, JSON.stringify(channels), 'EX', 12 * 60 * 60);
+      await this.redis.client.set(key, JSON.stringify(channels), 'EX', 60 * 60);
     } catch (error) {
       this.logger.warn(`Discord channel cache write failed: ${error instanceof Error ? error.message : String(error)}`);
     }

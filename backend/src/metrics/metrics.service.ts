@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from 'prom-client';
+import { StatsService } from '../admin/stats.service';
 import { APP_CONFIG, AppConfig } from '../core/config';
 import { MemberEventsQueue } from '../queue/member-events.queue';
 
@@ -24,11 +25,26 @@ export class MetricsService {
     registers: [this.registry],
   });
 
+  readonly discordRestCalls: Gauge;
+
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     queue: MemberEventsQueue,
+    stats: StatsService,
   ) {
     collectDefaultMetrics({ register: this.registry });
+    this.discordRestCalls = new Gauge({
+      name: 'dexbotx_discord_rest_calls',
+      help: 'Cumulative Discord REST calls by HTTP method and normalized route',
+      labelNames: ['method', 'route'] as const,
+      registers: [this.registry],
+      async collect() {
+        this.reset();
+        for (const call of await stats.discordRestCalls()) {
+          this.set({ method: call.method, route: call.route }, call.count);
+        }
+      },
+    });
     new Gauge({
       name: 'dexbotx_queue_jobs',
       help: 'Jobs in the member-events queue by state',

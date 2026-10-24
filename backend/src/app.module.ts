@@ -12,9 +12,10 @@ import { HttpMetricsInterceptor } from './metrics/http-metrics.interceptor';
 import { MetricsModule } from './metrics/metrics.module';
 import { TemplatesModule } from './templates/templates.module';
 import { WelcomeModule } from './welcome/welcome.module';
+import { RealtimeModule } from './realtime/realtime.module';
 
 @Module({
-  imports: [CoreModule, AdminModule, AuthModule, GuildsModule, WelcomeModule, AssetsModule, TemplatesModule, HealthModule, MetricsModule],
+  imports: [CoreModule, AdminModule, AuthModule, GuildsModule, WelcomeModule, AssetsModule, TemplatesModule, HealthModule, MetricsModule, RealtimeModule],
   providers: [
     { provide: APP_GUARD, useClass: RequestGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

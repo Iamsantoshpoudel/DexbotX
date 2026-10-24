@@ -7,7 +7,6 @@ import {
 } from '@reduxjs/toolkit/query/react';
 import { toast } from 'sonner';
 import { parseRetryAfter, rateLimitMessage } from '@/lib/rate-limit';
-import { loginUrl } from '@/lib/utils';
 import type {
   Channel,
   GuildDetail,
@@ -34,14 +33,6 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
   if (result.error?.status === 429 && typeof window !== 'undefined') {
     toast.error(rateLimitMessage(parseRetryAfter(result.meta?.response?.headers.get('retry-after'))), { id: 'rate-limit' });
   }
-  // Expired or missing session inside the dashboard: restart the login flow and come back to the same page.
-  if (
-    result.error?.status === 401 &&
-    typeof window !== 'undefined' &&
-    (window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/admin'))
-  ) {
-    window.location.assign(loginUrl(window.location.pathname));
-  }
   return result;
 };
 
@@ -49,7 +40,8 @@ export const api = createApi({
   reducerPath: 'api',
   baseQuery,
   tagTypes: ['Guilds', 'Guild', 'Channels', 'Roles'],
-  refetchOnFocus: true,
+  refetchOnFocus: false,
+  refetchOnReconnect: false,
   refetchOnMountOrArgChange: false,
   endpoints: (b) => ({
     getMe: b.query<Me, void>({ query: () => '/auth/me', keepUnusedDataFor: 300 }),
@@ -91,9 +83,9 @@ export const api = createApi({
       ],
     }),
     getPresets: b.query<Preset[], void>({
-      query: () => '/templates/presets',
+      query: () => '/presets',
       transformResponse: (r: { presets: Preset[] }) => r.presets,
-      keepUnusedDataFor: 3600,
+      keepUnusedDataFor: 86400,
     }),
 
     saveMessage: b.mutation<SavedMessage, { guildId: string; kind: MessageKind; config: MessageConfig }>({

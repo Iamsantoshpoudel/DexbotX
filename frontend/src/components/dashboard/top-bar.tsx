@@ -8,10 +8,11 @@ import { UserMenu } from '@/components/user-menu';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/misc';
 import type { GuildDetail, Me } from '@/lib/types';
+import type { RealtimeStatus } from '@/lib/realtime';
 import { useGetMeQuery } from '@/store/api';
 import { MobileNav } from './mobile-nav';
 
-export function DashboardTopBar({ guildId, guild, lastSyncedLabel, refreshing, cooldownSeconds, onRefresh }: { guildId?: string; guild?: GuildDetail; lastSyncedLabel?: string; refreshing?: boolean; cooldownSeconds?: number; onRefresh?: () => void }) {
+export function DashboardTopBar({ guildId, guild, lastSyncedLabel, refreshing, cooldownSeconds, onRefresh, realtimeStatus }: { guildId?: string; guild?: GuildDetail; lastSyncedLabel?: string; refreshing?: boolean; cooldownSeconds?: number; onRefresh?: () => void; realtimeStatus?: RealtimeStatus }) {
   const { data: me } = useGetMeQuery();
   return (
     <header className="sticky top-0 z-30 h-14 border-b border-border bg-surface">
@@ -32,6 +33,15 @@ export function DashboardTopBar({ guildId, guild, lastSyncedLabel, refreshing, c
           <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Refresh server data" title={cooldownSeconds ? `Refresh available in ${cooldownSeconds}s` : 'Refresh server data'} disabled={refreshing || (cooldownSeconds ?? 0) > 0} onClick={onRefresh}>
             <RefreshCw aria-hidden="true" className={refreshing ? 'animate-spin' : undefined} />
           </Button>
+        )}
+        {guildId && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status" aria-live="polite">
+            <span
+              aria-hidden="true"
+              className={`size-2 rounded-full ${realtimeStatus === 'live' ? 'bg-success' : 'bg-warning animate-pulse motion-reduce:animate-none'}`}
+            />
+            {realtimeStatus === 'live' ? 'Live' : 'Reconnecting'}
+          </span>
         )}
         <ThemeToggle />
         {me ? <UserMenu me={me as Me} /> : null}
