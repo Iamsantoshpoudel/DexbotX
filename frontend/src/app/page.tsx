@@ -100,9 +100,6 @@ export default function Home() {
               <a href="/api/invite" className={cn(buttonVariants({ size: 'lg' }))}>
                 Add to Discord
               </a>
-              <Link href="/dashboard" className={cn(buttonVariants({ size: 'lg', variant: 'secondary' }))}>
-                Open dashboard
-              </Link>
               <a
                 href={SITE.discordServerUrl}
                 className={cn(buttonVariants({ size: 'lg', variant: 'ghost' }))}
