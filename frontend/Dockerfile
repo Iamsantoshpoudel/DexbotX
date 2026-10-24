@@ -5,9 +5,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-ARG BACKEND_URL=https://dexbotx-zq8g.onrender.com
 ARG NEXT_PUBLIC_SITE_URL=https://dexbotx.vercel.app
-ENV BACKEND_URL=$BACKEND_URL
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN npm run build
 

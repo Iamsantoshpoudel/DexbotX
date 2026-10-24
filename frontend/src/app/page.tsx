@@ -7,6 +7,7 @@ import { CardMock } from '@/components/preview/card-mock';
 import { SiteHeader } from '@/components/site-header';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/misc';
+import { SITE } from '@/lib/site';
 import { cn } from '@/lib/utils';
 
 const FEATURES = [
@@ -15,22 +16,67 @@ const FEATURES = [
   { icon: Palette, title: 'Presets to start fast', body: 'Pick a ready-made design, tweak the words and colours, and see the real card update as you type.' },
   { icon: Variable, title: 'Variables', body: 'Use {user}, {server}, {memberCount} and more. The text adapts to every member.' },
   { icon: Gauge, title: 'Built for busy servers', body: 'Settings are cached and image rendering is rate limited, so a join wave does not slow your server down.' },
-  { icon: LockKeyhole, title: 'Minimal permissions', body: 'DexbotX asks only for View Channel, Send Messages, Embed Links and Attach Files. Never Administrator.' },
+  { icon: LockKeyhole, title: 'Minimal permissions', body: 'DexBotX asks only for View Channel, Send Messages, Embed Links and Attach Files. Never Administrator.' },
 ];
 
 const FAQ = [
-  { q: 'Is DexbotX free?', a: 'Yes. Adding the bot and configuring welcome and goodbye messages costs nothing.' },
+  { q: 'Is DexBotX free?', a: 'Yes. Adding the bot and configuring welcome and goodbye messages costs nothing.' },
   { q: 'What permissions does the bot need?', a: 'View Channel, Send Messages, Embed Links and Attach Files. It never asks for Administrator.' },
   { q: 'Who can change my server\u2019s settings?', a: 'Only people with the Manage Server permission (or the owner). The dashboard checks this on the server for every request.' },
-  { q: 'What does DexbotX store?', a: 'Your server\u2019s name, icon and member count, its channels and roles for dashboard selectors, the messages and custom backgrounds you configure, a log of who changed which setting, and an encrypted login session. Member avatars are fetched from Discord when needed and are not stored.' },
+  { q: 'What does DexBotX store?', a: 'Your server\u2019s name, icon and member count, its channels and roles for dashboard selectors, the messages and custom backgrounds you configure, a log of who changed which setting, and an encrypted login session. Member avatars are fetched from Discord when needed and are not stored.' },
   { q: 'Why does the bot need the Server Members intent?', a: 'Discord only tells a bot when someone joins or leaves if this intent is on. It is used for nothing else.' },
 ];
 
 export const dynamic = 'force-static';
 
 export default function Home() {
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        name: SITE.brandName,
+        url: SITE.url,
+        alternateName: ['DexBotX', 'Dexbotx', 'dexbotx'],
+        description: SITE.description,
+        publisher: { '@id': `${SITE.url}/#organization` },
+      },
+      {
+        '@type': 'SoftwareApplication',
+        name: SITE.brandName,
+        applicationCategory: 'CommunicationApplication',
+        operatingSystem: 'Web, Discord',
+        url: SITE.url,
+        description: SITE.description,
+        image: `${SITE.url}/og.png`,
+        offers: { price: '0', priceCurrency: 'USD' },
+        author: { '@id': `${SITE.url}/#person` },
+        brand: { '@id': `${SITE.url}/#organization` },
+      },
+      {
+        '@type': 'Person',
+        '@id': `${SITE.url}/#person`,
+        name: SITE.creatorDisplayName,
+        alternateName: SITE.creator,
+        url: SITE.url,
+        sameAs: [SITE.githubUrl, SITE.discordServerUrl],
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${SITE.url}/#organization`,
+        name: SITE.brandName,
+        url: SITE.url,
+        logo: { '@type': 'ImageObject', url: `${SITE.url}/icon.png` },
+      },
+    ],
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+      />
       <SiteHeader />
       <main>
         <Suspense fallback={null}>
@@ -43,10 +89,12 @@ export default function Home() {
               <span className="size-1.5 rounded-full bg-success" /> Free · public · works on any server
             </p>
             <h1 className="mt-5 text-balance text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-              Welcome cards your members actually <span className="text-primary">notice</span>.
+              {SITE.brandName} <br className="hidden sm:inline" />
+               Free Discord All in One Bot
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-lg text-muted-foreground">
-              DexbotX greets every new member with an image of their own avatar on your server&apos;s style. Set it all up in a clean dashboard. No commands to memorise.
+              <span className="block font-medium text-foreground">{SITE.tagline}</span>
+              <span className="mt-2 block">Welcome new members with custom avatar cards, and say goodbye in style. Set it all up in a clean dashboard. No commands to memorise.</span>
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="/api/invite" className={cn(buttonVariants({ size: 'lg' }))}>
@@ -55,6 +103,14 @@ export default function Home() {
               <Link href="/dashboard" className={cn(buttonVariants({ size: 'lg', variant: 'secondary' }))}>
                 Open dashboard
               </Link>
+              <a
+                href={SITE.discordServerUrl}
+                className={cn(buttonVariants({ size: 'lg', variant: 'ghost' }))}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Join the support server
+              </a>
             </div>
           </div>
 
@@ -108,6 +164,9 @@ export default function Home() {
             <Link href="/terms" className="underline-offset-4 hover:underline">Terms of Service</Link>
             <Link href="/privacy" className="underline-offset-4 hover:underline">Privacy Policy</Link>
             <Link href="/dashboard" className="underline-offset-4 hover:underline">Dashboard</Link>
+            <span>Made by {SITE.creatorDisplayName}</span>
+            <a href={SITE.githubUrl} target="_blank" rel="me noopener noreferrer" className="underline-offset-4 hover:underline">GitHub</a>
+            <a href={SITE.discordServerUrl} target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:underline">Join our Discord</a>
             <span>Not affiliated with Discord Inc.</span>
           </div>
         </div>

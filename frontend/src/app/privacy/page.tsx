@@ -1,14 +1,20 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteHeader } from '@/components/site-header';
+import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: 'How DexbotX handles information when you use the bot and dashboard.',
+  description: 'Learn what information DexBotX handles when you use its Discord welcome and goodbye bot, dashboard, and custom avatar cards.',
+  alternates: { canonical: '/privacy' },
+  openGraph: {
+    type: 'website',
+    url: '/privacy',
+    title: 'Privacy Policy',
+    description: 'Learn what information DexBotX handles when you use its Discord welcome and goodbye bot, dashboard, and custom avatar cards.',
+  },
   robots: { index: true, follow: true },
 };
-
-const CONTACT_URL = 'https://github.com/iamsantoshpoudel';
 
 export default function PrivacyPage() {
   return (
@@ -21,7 +27,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-medium text-foreground">Information we handle</h2>
             <p className="mt-2">
-              When you sign in with Discord, DexbotX receives your Discord user ID, username, display name, avatar
+              When you sign in with Discord, DexBotX receives your Discord user ID, username, display name, avatar
               information, and the server list and permissions needed to show servers you can manage. For servers where
               the bot is installed, the service stores server details, channel and role data used by the dashboard,
               welcome and goodbye settings, and records of setting changes. If you upload a message-card background,
@@ -50,7 +56,7 @@ export default function PrivacyPage() {
             <p className="mt-2">
               Session data expires with the session, and logging out removes the session and requests token
               revocation from Discord. Server configuration and audit records may remain after the bot leaves a server
-              so settings are not unexpectedly lost. You can remove DexbotX from a server; for a request to delete
+              so settings are not unexpectedly lost. You can remove DexBotX from a server; for a request to delete
               stored server data or uploaded backgrounds, contact the maintainer using the link below. Do not include
               secrets or sensitive account information in a public post.
             </p>
@@ -58,9 +64,9 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-medium text-foreground">Service providers and Discord</h2>
             <p className="mt-2">
-              DexbotX relies on Discord for login and bot functionality, and on its configured hosting, database,
+              DexBotX relies on Discord for login and bot functionality, and on its configured hosting, database,
               cache, and file-storage providers to operate. Information is processed by those services as needed to
-              provide DexbotX. Their own privacy terms also apply to your use of their services.
+              provide DexBotX. Their own privacy terms also apply to your use of their services.
             </p>
           </section>
           <section>
@@ -68,7 +74,7 @@ export default function PrivacyPage() {
             <p className="mt-2">
               This policy may be updated when the service or its data practices change. For privacy questions or data
               deletion requests, contact{' '}
-              <a className="text-primary underline underline-offset-4" href={CONTACT_URL} target="_blank" rel="noreferrer">
+              <a className="text-primary underline underline-offset-4" href={SITE.githubUrl} target="_blank" rel="noopener noreferrer">
                 the project maintainer on GitHub
               </a>
               . Please use a private contact method if available; do not publish private account or server information.

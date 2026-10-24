@@ -63,7 +63,7 @@ export default function GuildLayout({ children }: { children: ReactNode }) {
 
   if (error) {
     const status = errorStatus(error);
-    const title = status === 403 ? 'No access to this server' : status === 404 ? (giveUp404 ? 'DexbotX is not in this server' : 'Waiting for DexBotX to join this server…') : 'Could not load this server';
+    const title = status === 403 ? 'No access to this server' : status === 404 ? (giveUp404 ? 'DexBotX is not in this server' : 'Waiting for DexBotX to join this server…') : 'Could not load this server';
     const waiting = status === 404 && !giveUp404;
     if (status === 404 && !giveUp404) {
       return <><DashboardTopBar /><main className="w-full px-4 py-8 sm:px-8"><Card className="w-full p-8 text-center" role="status"><h1 className="text-lg font-semibold">{title}</h1></Card></main></>;

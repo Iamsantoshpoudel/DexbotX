@@ -70,7 +70,7 @@ function DashboardContent() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Your servers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Servers where you can manage settings. Add DexbotX to a server to configure it.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Servers where you can manage settings. Add DexBotX to a server to configure it.</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={cn(isFetching && 'animate-spin')} /> Refresh
@@ -138,7 +138,7 @@ function DashboardContent() {
                     Configure <ArrowRight />
                   </Link>
                 ) : (
-                  <a href={g.inviteUrl ?? '#'} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-auto w-full')}>
+                  <a href={g.inviteUrl ?? '#'} rel="noopener noreferrer" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-auto w-full')}>
                     <Plus /> Add DexBotX
                   </a>
                 )}
@@ -151,7 +151,7 @@ function DashboardContent() {
       {visibleGuilds && visibleGuilds.length === 0 && (
         <Card className="mt-6 p-8 text-center">
           <h2 className="font-medium">No servers yet</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">You need the Manage Server permission to configure a server. Ask an admin, or create your own server and add DexbotX.</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">You need the Manage Server permission to configure a server. Ask an admin, or create your own server and add DexBotX.</p>
           <a href="/api/invite" className={cn(buttonVariants({ className: 'mt-4' }))}>
             Add to Discord
           </a>

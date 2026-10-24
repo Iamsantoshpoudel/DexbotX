@@ -247,7 +247,7 @@ export function MessageEditor({ guildId, kind }: { guildId: string; kind: Messag
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_440px]">
       <div className="space-y-4 pb-24">
         <Card className="p-5">
-            <Field label="Channel" htmlFor="channel" error={err('channelId')} hint="Where DexbotX posts this message.">
+            <Field label="Channel" htmlFor="channel" error={err('channelId')} hint="Where DexBotX posts this message.">
               <Select id="channel" value={draft.channelId ?? ''} {...a11y('channelId', 'channel')} onChange={(e) => dispatch(patch({ channelId: e.target.value || null }))}>
                 <option value="">{visibleChannels ? 'Select a channel…' : 'Loading channels…'}</option>
                 {grouped.map(([category, list]) => (
