@@ -31,28 +31,19 @@ export const metadata: Metadata = {
     title: SITE.title,
     description: SITE.description,
     locale: 'en_US',
-    images: [
-      {
-        url: SITE.bannerGif,
-        width: 680,
-        height: 240,
-        alt: `${SITE.brandName} welcome card banner`,
-        type: 'image/gif',
-      },
-      {
-        url: '/og.png',
-        width: 1200,
-        height: 630,
-        alt: `${SITE.brandName} welcome card banner`,
-        type: 'image/png',
-      },
-    ],
+    images: [{
+      url: SITE.bannerGif,
+      width: 680,
+      height: 240,
+      alt: 'DexBotX, the all in one Discord bot',
+      type: 'image/gif',
+    }],
   },
   twitter: {
     card: 'summary_large_image',
     title: SITE.title,
     description: SITE.description,
-    images: ['/og.png'],
+    images: [SITE.bannerGif],
   },
   robots: {
     index: true,

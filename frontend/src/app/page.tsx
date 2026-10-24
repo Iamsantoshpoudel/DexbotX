@@ -48,7 +48,7 @@ export default function Home() {
         operatingSystem: 'Web, Discord',
         url: SITE.url,
         description: SITE.description,
-        image: `${SITE.url}/og.png`,
+        image: new URL(SITE.bannerGif, SITE.url).toString(),
         offers: { price: '0', priceCurrency: 'USD' },
         author: { '@id': `${SITE.url}/#person` },
         brand: { '@id': `${SITE.url}/#organization` },

@@ -54,7 +54,7 @@ The admin UI is under `src/app/admin/`, shared UI components are in `src/compone
 
 ## Social previews
 
-Site-wide Open Graph and Twitter metadata is configured in `src/app/layout.tsx`. The `/og.png` route generates the 1200 × 630 PNG social card, and `public/dexbotx-banner-v1.gif` is also included in Open Graph metadata. Inspect the generated image at `<NEXT_PUBLIC_SITE_URL>/og.png`. Social networks may cache previews after a page or image changes.
+Site-wide Open Graph and Twitter metadata is configured in `src/app/layout.tsx` and uses only the 680 × 240 GIF configured by `NEXT_PUBLIC_BANNER_GIF`. Social networks may cache previews after a page or image changes.
 
 ## Commands
 
