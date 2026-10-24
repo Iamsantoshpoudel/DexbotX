@@ -22,12 +22,6 @@ class MockSocket extends EventEmitter {
 
 function makeGateway() {
   const tickets = new Map<string, string>();
-  const subscriber = new EventEmitter() as EventEmitter & {
-    psubscribe: jest.Mock;
-    punsubscribe: jest.Mock;
-  };
-  subscriber.psubscribe = jest.fn(async () => 1);
-  subscriber.punsubscribe = jest.fn(async () => 1);
   const redis = {
     client: {
       get: jest.fn(async () => null as string | null),
@@ -38,7 +32,7 @@ function makeGateway() {
         return userId;
       }),
     },
-    createSubscriber: jest.fn(() => subscriber),
+    psubscribe: jest.fn(async (_pattern: string, _handler: (channel: string, message: string) => void) => undefined),
   };
   const sessions = {
     findActiveForUser: jest.fn(async (userId: string) => ({ userId } as never)),
@@ -59,7 +53,7 @@ function makeGateway() {
     { client: { set: jest.fn(async (key: string, userId: string) => tickets.set(key.slice('wsticket:'.length), userId)) } } as never,
     { wsPublicUrl: 'wss://api.example/ws' } as never,
   );
-  return { gateway, controller, tickets, subscriber, redis, sessions, guilds };
+  return { gateway, controller, tickets, redis, sessions, guilds };
 }
 
 function socketRequest(ticket: string, origin = ORIGIN): IncomingMessage {

@@ -31,8 +31,8 @@ const envSchema = z.object({
   ).default([]),
   /** Permission integer used in the invite link. Includes Manage Roles for per-channel permission repair; never Administrator. */
   BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('268487680'),
-  /** "auto" lets Discord choose the shard count, or set a fixed number. */
-  SHARD_COUNT: z.string().regex(/^(auto|\d+)$/).default('auto'),
+  /** Number of Discord shards to launch. */
+  SHARD_COUNT: z.coerce.number().int().min(1).default(1),
 
   /** 32-byte key as 64 hex chars. Generate: openssl rand -hex 32 */
   SESSION_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, 'must be 64 hex characters (32 bytes)'),
@@ -89,7 +89,7 @@ export interface AppConfig {
   discordBotToken: string;
   adminUserIds: string[];
   botPermissions: string;
-  shardCount: 'auto' | number;
+  shardCount: number;
   sessionKey: Buffer;
   sessionTtlSeconds: number;
   sentryDsn?: string;
@@ -138,7 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     discordBotToken: e.DISCORD_BOT_TOKEN,
     adminUserIds: e.ADMIN_USER_IDS,
     botPermissions: e.BOT_PERMISSIONS,
-    shardCount: e.SHARD_COUNT === 'auto' ? 'auto' : Number(e.SHARD_COUNT),
+    shardCount: e.SHARD_COUNT,
     sessionKey: Buffer.from(e.SESSION_ENCRYPTION_KEY, 'hex'),
     sessionTtlSeconds: e.SESSION_TTL_SECONDS,
     sentryDsn: e.SENTRY_DSN || undefined,

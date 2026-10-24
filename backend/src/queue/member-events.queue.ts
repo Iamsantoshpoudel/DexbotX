@@ -1,7 +1,6 @@
-import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import Redis from 'ioredis';
-import { APP_CONFIG, AppConfig } from '../core/config';
+import { RedisService } from '../redis/redis.service';
 import type { MessageKind } from '../shared/message-config';
 
 export const MEMBER_EVENTS_QUEUE = 'member-events';
@@ -22,15 +21,12 @@ export interface MemberEventJob {
 /** Producer side: bot shards enqueue here, the worker process consumes. */
 @Injectable()
 export class MemberEventsQueue implements OnApplicationShutdown {
+  private readonly logger = new Logger(MemberEventsQueue.name);
   readonly queue: Queue<MemberEventJob>;
-  private readonly connection: Redis;
 
-  constructor(@Inject(APP_CONFIG) config: AppConfig) {
-    // BullMQ needs maxRetriesPerRequest = null on its connections.
-    this.connection = new Redis(config.redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
-    this.connection.on('error', () => undefined); // surfaced through queue calls; avoids unhandled 'error' events
+  constructor(redis: RedisService) {
     this.queue = new Queue<MemberEventJob>(MEMBER_EVENTS_QUEUE, {
-      connection: this.connection,
+      connection: redis.client,
       defaultJobOptions: {
         attempts: 5,
         backoff: { type: 'exponential', delay: 2000 },
@@ -38,7 +34,7 @@ export class MemberEventsQueue implements OnApplicationShutdown {
         removeOnFail: { age: 24 * 3600, count: 5000 },
       },
     });
-    this.queue.on('error', () => undefined);
+    this.queue.on('error', (err) => this.logger.error(`Queue error: ${err.message}`));
   }
 
   async enqueue(job: MemberEventJob): Promise<void> {
@@ -49,6 +45,5 @@ export class MemberEventsQueue implements OnApplicationShutdown {
 
   async onApplicationShutdown(): Promise<void> {
     await this.queue.close();
-    this.connection.disconnect();
   }
 }

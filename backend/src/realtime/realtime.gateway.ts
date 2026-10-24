@@ -40,7 +40,6 @@ export class RealtimeGateway implements OnModuleInit, OnApplicationShutdown, OnG
   private readonly rooms = new Map<string, Set<ClientSocket>>();
   private readonly userSockets = new Map<string, Set<ClientSocket>>();
   private readonly alive = new WeakMap<ClientSocket, boolean>();
-  private subscriber?: ReturnType<RedisService['createSubscriber']>;
   private pingTimer?: ReturnType<typeof setInterval>;
 
   constructor(
@@ -51,9 +50,7 @@ export class RealtimeGateway implements OnModuleInit, OnApplicationShutdown, OnG
   ) {}
 
   async onModuleInit(): Promise<void> {
-    this.subscriber = this.redis.createSubscriber();
-    this.subscriber.on('pmessage', (_pattern, channel, message) => this.forwardEvent(channel, message));
-    await this.subscriber.psubscribe('guild:*:events');
+    await this.redis.psubscribe('guild:*:events', (channel, message) => this.forwardEvent(channel, message));
 
     this.pingTimer = setInterval(() => this.pingClients(), 25_000);
     this.pingTimer.unref();
@@ -61,7 +58,6 @@ export class RealtimeGateway implements OnModuleInit, OnApplicationShutdown, OnG
 
   async onApplicationShutdown(): Promise<void> {
     if (this.pingTimer) clearInterval(this.pingTimer);
-    if (this.subscriber) await this.subscriber.punsubscribe('guild:*:events');
     for (const sockets of this.userSockets.values()) {
       for (const socket of sockets) socket.close(1001, 'Server shutting down');
     }

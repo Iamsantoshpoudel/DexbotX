@@ -9,6 +9,7 @@ import { configureApp } from './app.setup';
 import { APP_CONFIG, AppConfig } from './core/config';
 
 async function bootstrap() {
+  process.env.DEXBOTX_PROCESS_ROLE = 'api';
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const config = app.get<AppConfig>(APP_CONFIG);
 

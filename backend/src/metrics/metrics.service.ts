@@ -4,6 +4,7 @@ import { collectDefaultMetrics, Counter, Gauge, Histogram, Registry } from 'prom
 import { StatsService } from '../admin/stats.service';
 import { APP_CONFIG, AppConfig } from '../core/config';
 import { MemberEventsQueue } from '../queue/member-events.queue';
+import { RedisService } from '../redis/redis.service';
 
 /** Prometheus registry shared by the API and the worker (each process exposes its own). */
 @Injectable()
@@ -31,6 +32,7 @@ export class MetricsService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     queue: MemberEventsQueue,
     stats: StatsService,
+    redis: RedisService,
   ) {
     collectDefaultMetrics({ register: this.registry });
     this.discordRestCalls = new Gauge({
@@ -53,6 +55,14 @@ export class MetricsService {
       async collect() {
         const counts = await queue.queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
         for (const [state, value] of Object.entries(counts)) this.set({ state }, value);
+      },
+    });
+    new Gauge({
+      name: 'redis_connections',
+      help: 'Connected clients reported by Redis INFO clients',
+      registers: [this.registry],
+      async collect() {
+        this.set(await redis.connectedClients());
       },
     });
   }

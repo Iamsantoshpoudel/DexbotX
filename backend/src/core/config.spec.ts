@@ -20,7 +20,7 @@ describe('loadConfig', () => {
     expect(c.wsPublicUrl).toBe('wss://dexbotx-zq8g.onrender.com/ws');
     expect(c.cookieSecure).toBe(true);
     expect(c.databaseSsl).toBe(true);
-    expect(c.shardCount).toBe('auto');
+    expect(c.shardCount).toBe(1);
     expect(c.botPermissions).toBe('268487680');
     expect(c.adminUserIds).toEqual([]);
     expect(c.sessionKey).toHaveLength(32);
@@ -30,6 +30,11 @@ describe('loadConfig', () => {
     const c = loadConfig({ ...valid, ADMIN_USER_IDS: '123456789012345678, 987654321098765432' } as NodeJS.ProcessEnv);
     expect(c.adminUserIds).toEqual(['123456789012345678', '987654321098765432']);
     expect(() => loadConfig({ ...valid, ADMIN_USER_IDS: 'not-a-discord-id' } as NodeJS.ProcessEnv)).toThrow(/ADMIN_USER_IDS/);
+  });
+
+  it('accepts a configured shard count', () => {
+    expect(loadConfig({ ...valid, SHARD_COUNT: '3' } as NodeJS.ProcessEnv).shardCount).toBe(3);
+    expect(() => loadConfig({ ...valid, SHARD_COUNT: 'auto' } as NodeJS.ProcessEnv)).toThrow(/SHARD_COUNT/);
   });
 
   it('fails fast with readable errors', () => {

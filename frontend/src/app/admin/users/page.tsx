@@ -40,8 +40,8 @@ export default function AdminUsersPage() {
           <Card className="overflow-hidden">
             <div className="border-b border-border p-4"><h2 className="font-semibold">Recent logins</h2></div>
             <div className="divide-y divide-border">
-              {data?.recentLogins.length ? data.recentLogins.map((user) => (
-                <div key={user.id} className="flex items-center gap-3 px-4 py-3">
+              {data?.recentLogins.length ? data.recentLogins.map((user, index) => (
+                <div key={`${user.id}-${index}`} className="flex items-center gap-3 px-4 py-3">
                   <Image src={user.avatar} alt="" width={36} height={36} unoptimized className="size-9 rounded-full bg-muted" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{user.username}</p>

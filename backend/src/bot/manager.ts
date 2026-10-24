@@ -5,8 +5,7 @@ import pino from 'pino';
 import { loadConfig } from '../core/config';
 
 /**
- * Entry point for the bot. Spawns one process per group of Discord shards.
- * Sharding is required by Discord once a bot is in 2,500 servers; "auto" asks Discord for the right count.
+ * Entry point for the bot. Spawns one process per configured Discord shard.
  */
 async function main() {
   const config = loadConfig();
@@ -25,13 +24,13 @@ async function main() {
     shard.on('ready', () => log.info({ shard: shard.id }, 'shard ready'));
   });
 
-  const stop = () => {
+  const stop = async () => {
     log.info('shutting down shards');
-    manager.shards.forEach((s) => s.kill());
-    setTimeout(() => process.exit(0), 3000).unref();
+    await Promise.allSettled([...manager.shards.values()].map((shard) => shard.kill()));
+    process.exitCode = 0;
   };
-  process.on('SIGTERM', stop);
-  process.on('SIGINT', stop);
+  process.once('SIGTERM', () => void stop());
+  process.once('SIGINT', () => void stop());
 
   await manager.spawn({ timeout: 180_000 });
 }

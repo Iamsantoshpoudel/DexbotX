@@ -2,16 +2,17 @@ import { Global, Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { DatabaseService } from '../db/database.service';
 import { RateLimiter } from '../redis/rate-limiter.service';
-import { RedisService } from '../redis/redis.service';
+import { RedisModule } from '../redis/redis.module';
 import { SettingsCache } from '../redis/settings-cache.service';
 import { StatsService } from '../admin/stats.service';
 import { FeatureFlagsService } from './feature-flags.service';
-import { APP_CONFIG, AppConfig, loadConfig } from './config';
+import { loadConfig } from './config';
 
 /** Infrastructure shared by the API process and every bot shard process. */
 @Global()
 @Module({
   imports: [
+    RedisModule,
     LoggerModule.forRootAsync({
       useFactory: () => {
         const config = loadConfig();
@@ -38,14 +39,12 @@ import { APP_CONFIG, AppConfig, loadConfig } from './config';
     }),
   ],
   providers: [
-    { provide: APP_CONFIG, useFactory: (): AppConfig => loadConfig() },
     DatabaseService,
-    RedisService,
     RateLimiter,
     SettingsCache,
     StatsService,
     FeatureFlagsService,
   ],
-  exports: [APP_CONFIG, DatabaseService, RedisService, RateLimiter, SettingsCache, StatsService, FeatureFlagsService],
+  exports: [DatabaseService, RedisModule, RateLimiter, SettingsCache, StatsService, FeatureFlagsService],
 })
 export class CoreModule {}

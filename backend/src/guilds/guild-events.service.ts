@@ -16,8 +16,7 @@ export class GuildEventsService implements OnModuleInit {
   constructor(private readonly redis: RedisService) {}
 
   async onModuleInit(): Promise<void> {
-    const subscriber = this.redis.createSubscriber();
-    subscriber.on('message', (channel, message) => {
+    const dispatch = (channel: string, message: string) => {
       if (channel === GUILD_CHANNELS_CHANGED_CHANNEL) {
         this.changes.next({ type: 'channels_changed', data: { guildId: message } });
       } else if (channel === GUILD_SETTINGS_CHANGED_CHANNEL) {
@@ -29,14 +28,14 @@ export class GuildEventsService implements OnModuleInit {
       } else if (channel === GUILD_MEMBERSHIP_EVENTS_CHANNEL) {
         this.changes.next({ type: 'guilds_changed', data: { guildId: message } });
       }
-    });
-    await subscriber.subscribe(
-      GUILD_MEMBERSHIP_EVENTS_CHANNEL,
-      GUILD_CHANNELS_CHANGED_CHANNEL,
-      GUILD_SETTINGS_CHANGED_CHANNEL,
-      GUILD_ROLES_CHANGED_CHANNEL,
-      GUILD_SYNCED_CHANNEL,
-    );
+    };
+    await Promise.all([
+      this.redis.subscribe(GUILD_MEMBERSHIP_EVENTS_CHANNEL, dispatch),
+      this.redis.subscribe(GUILD_CHANNELS_CHANGED_CHANNEL, dispatch),
+      this.redis.subscribe(GUILD_SETTINGS_CHANGED_CHANNEL, dispatch),
+      this.redis.subscribe(GUILD_ROLES_CHANGED_CHANNEL, dispatch),
+      this.redis.subscribe(GUILD_SYNCED_CHANNEL, dispatch),
+    ]);
   }
 
   stream(): Observable<MessageEvent> {

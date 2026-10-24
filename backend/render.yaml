@@ -20,7 +20,7 @@ envVarGroups:
       - key: ADMIN_USER_IDS
         value: ""
       - key: SHARD_COUNT
-        value: auto
+        value: "1"
       - key: SESSION_TTL_SECONDS
         value: "604800"
       - key: WORKER_CONCURRENCY
@@ -39,6 +39,8 @@ services:
     healthCheckPath: /health/ready
     envVars:
       - fromGroup: dexbotx-backend-shared
+      - key: PORT
+        value: "10000"
       - key: DATABASE_URL
         sync: false
       - key: REDIS_URL

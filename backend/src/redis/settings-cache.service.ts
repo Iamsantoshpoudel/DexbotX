@@ -37,10 +37,8 @@ export class SettingsCache implements OnModuleInit {
     private readonly stats: StatsService,
   ) {}
 
-  onModuleInit(): void {
-    const sub = this.redis.createSubscriber();
-    sub.subscribe(GUILD_SETTINGS_CHANGED_CHANNEL).catch((err) => this.logger.error(`Subscribe failed: ${err.message}`));
-    sub.on('message', (channel, guildId) => {
+  async onModuleInit(): Promise<void> {
+    await this.redis.subscribe(GUILD_SETTINGS_CHANGED_CHANNEL, (channel, guildId) => {
       if (channel === GUILD_SETTINGS_CHANGED_CHANNEL) this.l1.delete(guildId);
     });
   }

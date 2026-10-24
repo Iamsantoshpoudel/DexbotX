@@ -129,10 +129,11 @@ Feature flags are `maintenance` (boolean), `musicEnabled` (boolean), `socialEnab
 - **Transport:** Helmet headers, request body limit of 32 KB, strict zod validation (unknown keys rejected), Sentry for errors, pino logs.
 
 ## Scaling
-- Sharding: `SHARD_COUNT=auto` (Discord recommends the count; required from 2,500 servers). Each shard is a process; run the manager on one host or split by shard ids later.
+- Sharding: `SHARD_COUNT=1` by default. Set a larger integer when required; each shard is a process managed by the bot manager.
+- Redis connections: each API instance and bot shard uses one shared command client and one shared subscriber client; settings invalidation, guild events and realtime updates share that subscriber. Queue producers reuse the command client. Each worker also uses BullMQ's worker and blocking connections. Connections are named (`api:main`, `api:sub`, `shard0:main`, etc.) and closed during shutdown; expected Redis client counts are two for API/shards and four for a worker.
 - The API is stateless: run N replicas behind a load balancer. Sessions, rate limits and the config cache are in Redis; config changes reach the bot's in-process cache through Redis pub/sub.
 - Welcome cards are rendered by workers: `WORKER_CONCURRENCY` jobs per process, a global 40 jobs/s limiter, 5 attempts with exponential backoff, and `docker compose up -d --scale worker=3` to add capacity. A join raid queues up instead of exhausting shard CPU.
-- Metrics: `dexbotx_http_request_duration_seconds`, `dexbotx_discord_rest_calls`, `dexbotx_member_events_total` and `dexbotx_queue_jobs` (plus default process metrics). Discord REST calls are counted in shared Redis by method and normalized route. Set `WORKER_METRICS_PORT` to scrape workers too.
+- Metrics: `dexbotx_http_request_duration_seconds`, `dexbotx_discord_rest_calls`, `dexbotx_member_events_total`, `dexbotx_queue_jobs`, and `redis_connections` (plus default process metrics). Discord REST calls are counted in shared Redis by method and normalized route. Redis client count is read from `INFO clients`. Set `WORKER_METRICS_PORT` to scrape workers too.
 
 ## Tests
 ```bash

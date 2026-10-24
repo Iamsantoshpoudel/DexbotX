@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { Job, UnrecoverableError, Worker } from 'bullmq';
-import Redis from 'ioredis';
 import { APP_CONFIG, AppConfig } from '../core/config';
 import { ChannelAccessService } from '../discord/channel-access.service';
 import { DiscordApiError, DiscordRestService } from '../discord/discord-rest.service';
@@ -12,6 +11,7 @@ import { MessageBuilder } from '../render/message-builder.service';
 import { AssetStorage } from '../storage/asset-storage.service';
 import { StatsService } from '../admin/stats.service';
 import { DatabaseService } from '../db/database.service';
+import { RedisService } from '../redis/redis.service';
 import { guilds } from '../db/schema';
 import { eq } from 'drizzle-orm';
 
@@ -28,7 +28,6 @@ export type JobResult = 'sent' | 'skipped-disabled' | 'skipped-stale';
 export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(MemberEventsProcessor.name);
   private worker?: Worker<MemberEventJob, JobResult>;
-  private connection?: Redis;
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -41,13 +40,12 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
     private readonly metrics: MetricsService,
     private readonly stats: StatsService,
     private readonly database: DatabaseService,
+    private readonly redis: RedisService,
   ) {}
 
-  onApplicationBootstrap(): void {
-    this.connection = new Redis(this.config.redisUrl, { maxRetriesPerRequest: null });
-    this.connection.on('error', (err) => this.logger.error(`Redis error: ${err.message}`));
+  async onApplicationBootstrap(): Promise<void> {
     this.worker = new Worker<MemberEventJob, JobResult>(MEMBER_EVENTS_QUEUE, (job) => this.process(job), {
-      connection: this.connection,
+      connection: this.redis.client,
       concurrency: this.config.workerConcurrency,
       // Global cap across all workers; Discord's own per-channel limits are handled by 429 back-off below.
       limiter: { max: 40, duration: 1000 },
@@ -80,12 +78,12 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
     });
     this.worker.on('error', (err) => this.logger.error(`Worker error: ${err.message}`));
     this.logger.log(`Worker started (concurrency ${this.config.workerConcurrency})`);
+    await this.worker.waitUntilReady();
   }
 
   async onApplicationShutdown(): Promise<void> {
     // Waits for in-flight jobs, so a deploy never drops a half-sent welcome.
     await this.worker?.close();
-    this.connection?.disconnect();
   }
 
   async process(job: Job<MemberEventJob, JobResult>): Promise<JobResult> {

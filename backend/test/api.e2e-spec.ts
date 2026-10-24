@@ -305,11 +305,19 @@ beforeAll(async () => {
   ]);
 
   // --- Bot (a separate Nest context, like a shard process). Not initialised, so it never logs in to Discord. ---
+  const previousBotRole = process.env.DEXBOTX_PROCESS_ROLE;
+  process.env.DEXBOTX_PROCESS_ROLE = 'shard0';
   botModule = await Test.createTestingModule({ imports: [BotModule] }).compile();
+  if (previousBotRole === undefined) delete process.env.DEXBOTX_PROCESS_ROLE;
+  else process.env.DEXBOTX_PROCESS_ROLE = previousBotRole;
   await botModule.get(SettingsCache).onModuleInit();
 
   // --- Worker (consumes the queue). Created here, started inside the bot tests via init(). ---
+  const previousProcessRole = process.env.DEXBOTX_PROCESS_ROLE;
+  process.env.DEXBOTX_PROCESS_ROLE = 'worker';
   workerModule = await Test.createTestingModule({ imports: [WorkerModule] }).compile();
+  if (previousProcessRole === undefined) delete process.env.DEXBOTX_PROCESS_ROLE;
+  else process.env.DEXBOTX_PROCESS_ROLE = previousProcessRole;
 });
 
 afterAll(async () => {
@@ -335,6 +343,7 @@ describe('DexBotX API', () => {
     const res = await http().get('/health/ready').expect(200);
     expect(res.body).toEqual({ status: 'ok', db: true, redis: true });
     await http().get('/health').expect(200);
+    expect(await app.get(RedisService).connectedClients()).toBeGreaterThanOrEqual(2);
   });
 
   it('serves presets publicly with cache headers', async () => {
@@ -1039,6 +1048,7 @@ describe('DexBotX API', () => {
     expect(res.text).toContain('dexbotx_http_request_duration_seconds_count');
     expect(res.text).toContain('route="/guilds/:guildId/messages/:kind"');
     expect(res.text).toContain('dexbotx_queue_jobs{state="waiting"}');
+    expect(res.text).toMatch(/redis_connections \d+/);
     expect(res.text).toContain('nodejs_heap_size_total_bytes');
     expect(res.text).not.toContain(G1); // raw ids never become label values
   });
@@ -1234,5 +1244,16 @@ describe('Bot → queue → worker', () => {
     failMessagePost = false;
     expect(job.attemptsMade).toBe(1); // unrecoverable: moved to failed immediately, no 5x retry storm
     expect(job.failedReason).toContain('Discord refused the post (403');
+  });
+
+  it('keeps the named API, shard and worker Redis clients below the connection budget', async () => {
+    await workerModule.init();
+    const apiRedis = app.get(RedisService);
+    expect(await apiRedis.connectedClients()).toBeLessThanOrEqual(10);
+    const clientList = await apiRedis.client.call('CLIENT', 'LIST') as string;
+    for (const name of ['api:main', 'api:sub', 'shard0:main', 'shard0:sub', 'worker:main', 'worker:sub']) {
+      expect(clientList).toContain(`name=${name}`);
+    }
+    expect(clientList.split(/\r?\n/).filter(Boolean).every((client) => client.includes(' name='))).toBe(true);
   });
 });

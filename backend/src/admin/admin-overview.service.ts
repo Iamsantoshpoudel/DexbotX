@@ -1,10 +1,8 @@
-import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
-import { Queue } from 'bullmq';
-import Redis from 'ioredis';
+import { Injectable, Logger } from '@nestjs/common';
 import { and, count, eq, gte, isNotNull, sql } from 'drizzle-orm';
 import { DatabaseService } from '../db/database.service';
 import { guilds } from '../db/schema';
-import { MEMBER_EVENTS_QUEUE, MemberEventJob } from '../queue/member-events.queue';
+import { MemberEventsQueue } from '../queue/member-events.queue';
 import { RedisService } from '../redis/redis.service';
 import { StatsService } from './stats.service';
 
@@ -35,24 +33,15 @@ interface DailyMessageRow {
 }
 
 @Injectable()
-export class AdminOverviewService implements OnApplicationShutdown {
+export class AdminOverviewService {
   private readonly logger = new Logger(AdminOverviewService.name);
-  private readonly queue: Queue<MemberEventJob>;
-  private readonly queueConnection: Redis;
 
   constructor(
     private readonly database: DatabaseService,
     private readonly redis: RedisService,
     private readonly stats: StatsService,
-  ) {
-    this.queueConnection = this.redis.client.duplicate({ maxRetriesPerRequest: null });
-    this.queue = new Queue<MemberEventJob>(MEMBER_EVENTS_QUEUE, { connection: this.queueConnection });
-  }
-
-  async onApplicationShutdown(): Promise<void> {
-    await this.queue.close();
-    this.queueConnection.disconnect();
-  }
+    private readonly memberEventsQueue: MemberEventsQueue,
+  ) {}
 
   async overview(): Promise<{
     health: { api: HealthCheck; redis: HealthCheck; postgres: HealthCheck; bot: HealthCheck; worker: HealthCheck };
@@ -230,8 +219,9 @@ export class AdminOverviewService implements OnApplicationShutdown {
   }
 
   private async readQueue() {
-    const counts = await this.queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
-    const oldest = await this.queue.getWaiting(0, 0);
+    const queue = this.memberEventsQueue.queue;
+    const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
+    const oldest = await queue.getWaiting(0, 0);
     return {
       waiting: counts.waiting ?? 0,
       active: counts.active ?? 0,
@@ -243,8 +233,8 @@ export class AdminOverviewService implements OnApplicationShutdown {
 
   private async checkRedis(): Promise<HealthCheck> {
     try {
-      await this.redis.client.ping();
-      return { ok: true, detail: 'Connected' };
+      const clients = await this.redis.connectedClients();
+      return { ok: true, detail: `Connected (${clients} clients)` };
     } catch {
       return { ok: false, detail: 'Connection failed' };
     }

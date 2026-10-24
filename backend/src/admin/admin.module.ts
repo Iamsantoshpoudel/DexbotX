@@ -7,9 +7,10 @@ import { AdminOperationsService } from './admin-operations.service';
 import { DiscordModule } from '../discord/discord.module';
 import { StorageModule } from '../storage/storage.module';
 import { AdminUsersContentService } from './admin-users-content.service';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
-  imports: [DiscordModule, StorageModule],
+  imports: [DiscordModule, StorageModule, QueueModule],
   controllers: [AdminController, PublicFlagsController],
   providers: [AdminGuard, AdminOverviewService, AdminAuditService, AdminOperationsService, AdminUsersContentService],
 })

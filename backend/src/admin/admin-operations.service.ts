@@ -2,15 +2,13 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
-  OnApplicationShutdown,
 } from '@nestjs/common';
-import { Job, Queue } from 'bullmq';
-import Redis from 'ioredis';
+import { Job } from 'bullmq';
 import { and, count, eq, ilike, or } from 'drizzle-orm';
 import { DatabaseService } from '../db/database.service';
 import { guildChannels, guildSettings, guilds } from '../db/schema';
 import { DiscordApiError, DiscordRestService } from '../discord/discord-rest.service';
-import { MEMBER_EVENTS_QUEUE, MemberEventJob } from '../queue/member-events.queue';
+import { MemberEventsQueue, type MemberEventJob } from '../queue/member-events.queue';
 import { defaultGuildMessages } from '../shared/message-config';
 import { RedisService } from '../redis/redis.service';
 import { SettingsCache } from '../redis/settings-cache.service';
@@ -25,10 +23,7 @@ interface FailedPost {
 }
 
 @Injectable()
-export class AdminOperationsService implements OnApplicationShutdown {
-  private readonly queue: Queue<MemberEventJob>;
-  private readonly queueConnection: Redis;
-
+export class AdminOperationsService {
   constructor(
     private readonly database: DatabaseService,
     private readonly redis: RedisService,
@@ -36,15 +31,8 @@ export class AdminOperationsService implements OnApplicationShutdown {
     private readonly settings: SettingsCache,
     private readonly stats: StatsService,
     private readonly audit: AdminAuditService,
-  ) {
-    this.queueConnection = this.redis.client.duplicate({ maxRetriesPerRequest: null });
-    this.queue = new Queue<MemberEventJob>(MEMBER_EVENTS_QUEUE, { connection: this.queueConnection });
-  }
-
-  async onApplicationShutdown(): Promise<void> {
-    await this.queue.close();
-    this.queueConnection.disconnect();
-  }
+    private readonly memberEventsQueue: MemberEventsQueue,
+  ) {}
 
   async listGuilds(search = '', pageInput = 1) {
     const page = Number.isFinite(pageInput) ? Math.max(1, Math.floor(pageInput)) : 1;
@@ -203,7 +191,7 @@ export class AdminOperationsService implements OnApplicationShutdown {
   }
 
   async failures() {
-    const jobs = await this.queue.getJobs(['failed'], 0, 99, true);
+    const jobs = await this.memberEventsQueue.queue.getJobs(['failed'], 0, 99, true);
     return jobs.map((job) => ({
       id: job.id ?? '',
       kind: job.data.kind,
@@ -214,7 +202,7 @@ export class AdminOperationsService implements OnApplicationShutdown {
   }
 
   async retryFailure(adminId: string, jobId: string): Promise<{ ok: true }> {
-    const job = await this.queue.getJob(jobId);
+    const job = await this.memberEventsQueue.queue.getJob(jobId);
     if (!job || await job.getState() !== 'failed') throw new NotFoundException('Failed job not found');
     const target = safeJobTarget(job);
     await job.retry();
@@ -224,7 +212,7 @@ export class AdminOperationsService implements OnApplicationShutdown {
 
   async clearFailures(adminId: string, confirm: boolean): Promise<{ cleared: number }> {
     if (confirm !== true) throw new BadRequestException('Confirmation is required');
-    const jobs = await this.queue.getJobs(['failed'], 0, -1, true);
+    const jobs = await this.memberEventsQueue.queue.getJobs(['failed'], 0, -1, true);
     for (const job of jobs) await job.remove();
     await this.audit.log(adminId, 'failures.clear', 'all', { count: jobs.length });
     return { cleared: jobs.length };
