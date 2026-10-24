@@ -18,15 +18,17 @@ import { SettingsCache } from '../redis/settings-cache.service';
 import { MemberEventsQueue } from '../queue/member-events.queue';
 import type { MessageKind } from '../shared/message-config';
 import { GuildSyncService } from './guild-sync.service';
-
-/** Max welcome/goodbye posts per server per minute. Protects against join raids and Discord rate limits. */
-const MAX_POSTS_PER_MINUTE = 20;
+import { StatsService } from '../admin/stats.service';
+import { FeatureFlagsService } from '../core/feature-flags.service';
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger(BotService.name);
   readonly client: Client;
   private syncTimer?: ReturnType<typeof setInterval>;
+  private heartbeatTimer?: ReturnType<typeof setInterval>;
+  private reconnects = 0;
+  private shardStatus = 'connecting';
 
   constructor(
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -34,6 +36,8 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
     private readonly queue: MemberEventsQueue,
     private readonly limiter: RateLimiter,
     private readonly sync: GuildSyncService,
+    private readonly stats: StatsService,
+    private readonly featureFlags: FeatureFlagsService,
   ) {
     this.client = new Client({
       // Server Members is a privileged intent: enable it in the Developer Portal (Bot > Privileged Gateway Intents).
@@ -98,13 +102,22 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
     c.on(Events.Error, (err) => this.logger.error(`Client error: ${err.message}`));
     c.on(Events.ShardError, (err, id) => this.logger.error(`Shard ${id} error: ${err.message}`));
     c.on(Events.ShardDisconnect, (_e, id) => this.logger.warn(`Shard ${id} disconnected`));
-    c.on(Events.ShardReconnecting, (id) => this.logger.warn(`Shard ${id} reconnecting`));
+    c.on(Events.ShardReconnecting, (id) => {
+      this.reconnects++;
+      this.shardStatus = 'reconnecting';
+      this.logger.warn(`Shard ${id} reconnecting`);
+    });
+    c.on(Events.ShardResume, (id) => {
+      this.shardStatus = 'online';
+      this.logger.log(`Shard ${id} resumed`);
+    });
 
     await c.login(this.config.discordBotToken);
   }
 
   async onApplicationShutdown(): Promise<void> {
     if (this.syncTimer) clearInterval(this.syncTimer);
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     await this.client.destroy();
   }
 
@@ -117,15 +130,30 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   }
 
   private async onReady(ready: Client<true>): Promise<void> {
+    this.shardStatus = 'online';
     this.logger.log(`Ready as ${ready.user.tag} with ${ready.guilds.cache.size} guild(s) on this shard`);
     ready.user.setPresence({
       activities: [{ name: 'custom', state: 'dexbotx.vercel.app', type: ActivityType.Custom }],
       status: 'online',
     });
+    await this.writeHeartbeat();
+    this.heartbeatTimer = setInterval(() => void this.writeHeartbeat(), 15_000);
+    this.heartbeatTimer.unref();
     await this.syncAll([...ready.guilds.cache.values()]);
     this.syncTimer = setInterval(() => {
       void this.syncAll([...ready.guilds.cache.values()]);
     }, 3 * 60 * 60 * 1000);
+  }
+
+  private writeHeartbeat(): Promise<void> {
+    const shardId = this.client.shard?.ids[0] ?? 0;
+    return this.stats.heartbeat(`shard:${shardId}`, {
+      status: this.shardStatus,
+      pingMs: this.client.ws.ping,
+      guilds: this.client.guilds.cache.size,
+      reconnects: this.reconnects,
+      at: new Date().toISOString(),
+    });
   }
 
   private async syncAll(guilds: Guild[]): Promise<void> {
@@ -137,6 +165,8 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
 
   private async handleMember(kind: MessageKind, member: GuildMember | PartialGuildMember): Promise<void> {
     if (member.user.bot) return;
+    const flags = await this.featureFlags.get();
+    if (flags.maintenance) return;
     const guild = member.guild;
 
     const config = (await this.settings.get(guild.id))[kind];
@@ -159,7 +189,7 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
       if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) return;
     }
 
-    const allowed = await this.limiter.hit(`post:${guild.id}:${kind}`, MAX_POSTS_PER_MINUTE, 60);
+    const allowed = await this.limiter.hit(`post:${guild.id}:${kind}`, flags.messageRatePerMinute, 60);
     if (!allowed.allowed) {
       this.logger.warn(`Rate limit reached for ${kind} in ${guild.id}; skipping`);
       return;

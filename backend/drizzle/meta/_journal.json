@@ -15,6 +15,13 @@
       "when": 1792350000000,
       "tag": "0001_guild_data",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792858800000,
+      "tag": "0002_admin_operations",
+      "breakpoints": true
     }
   ]
 }

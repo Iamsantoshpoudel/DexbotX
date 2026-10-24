@@ -16,7 +16,7 @@ import { configureApp } from '../src/app.setup';
 import { BotModule } from '../src/bot/bot.module';
 import { BotService } from '../src/bot/bot.service';
 import { DatabaseService } from '../src/db/database.service';
-import { auditLogs, guildChannels, guildRoles, guilds } from '../src/db/schema';
+import { adminAudit, auditLogs, guildChannels, guildRoles, guildSettings, guilds } from '../src/db/schema';
 import { SettingsCache } from '../src/redis/settings-cache.service';
 import { RedisService } from '../src/redis/redis.service';
 import { MemberEventsQueue } from '../src/queue/member-events.queue';
@@ -24,6 +24,9 @@ import { WorkerModule } from '../src/worker/worker.module';
 import { APP_CONFIG } from '../src/core/config';
 import { SessionService } from '../src/auth/session.service';
 import { WelcomeService } from '../src/welcome/welcome.service';
+import { DiscordRestService } from '../src/discord/discord-rest.service';
+import { GuildsService } from '../src/guilds/guilds.service';
+import { messageConfigSchema } from '../src/shared/message-config';
 
 const PG_PORT = 54329;
 const REDIS_PORT = 63799;
@@ -34,6 +37,7 @@ const G3 = '333333333333333333'; // user can manage, bot not installed
 const C1 = '555555555555555551';
 const C_OTHER_GUILD = '999999999999999999';
 const USER_ID = '777777777777777777';
+const ADMIN_ID = '888888888888888888';
 
 let pgProc: ChildProcess;
 let pgDir: string;
@@ -50,6 +54,7 @@ const discordCalls: Array<{ method: string; path: string; init: RequestInit }> =
 let failMessagePost = false;
 let failRoleLookup = false;
 let messagePostFailures = 0;
+let rateLimitGuildChannels = false;
 let stubGuildRoles: Array<{ id: string; name: string; color: number; position: number; hoist?: boolean }> = [];
 let stubBotRoleIds: string[] = [];
 
@@ -87,6 +92,12 @@ function installFetchStub(png: Buffer) {
         ]);
       }
       if (path === `/guilds/${G1}/channels`) {
+        if (rateLimitGuildChannels) {
+          return new Response(JSON.stringify({ code: 0, message: 'Rate limited', retry_after: 30, global: true }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'x-ratelimit-scope': 'global' },
+          });
+        }
         return json([
           { id: '555555555555555550', type: 4, name: 'Info', position: 0, parent_id: null },
           { id: C1, type: 0, name: 'welcome', position: 1, parent_id: '555555555555555550' },
@@ -117,6 +128,12 @@ function installFetchStub(png: Buffer) {
       if (path === `/channels/${C1}/permissions/444444444444444444` && method === 'PUT') {
         return new Response(null, { status: 204 });
       }
+      if (path === `/channels/${C1}` && method === 'GET') {
+        return json({ id: C1, guild_id: G1, type: 0, name: 'welcome', position: 1, parent_id: null, permission_overwrites: [] });
+      }
+      if (path === `/users/@me/guilds/${G1}` && method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
       if (path === `/channels/${C1}/messages`) {
         if (failMessagePost || messagePostFailures > 0) {
           if (messagePostFailures > 0) messagePostFailures--;
@@ -129,6 +146,19 @@ function installFetchStub(png: Buffer) {
     if (url.startsWith(SUPA)) {
       const path = url.slice(SUPA.length);
       storageCalls.push({ method, path, body: init.body });
+      if (path === '/storage/v1/object/list/card-backgrounds' && method === 'POST') {
+        const { prefix = '' } = JSON.parse(String(init.body)) as { prefix?: string };
+        const paths = [...storageObjects.keys()].filter((key) => key.startsWith(prefix));
+        if (!prefix) {
+          return json([...new Set(paths.map((key) => key.split('/')[0]))].map((name) => ({ id: null, name })));
+        }
+        return json(paths.map((key) => ({
+          id: key,
+          name: key.slice(prefix.length),
+          created_at: '2026-01-01T00:00:00.000Z',
+          metadata: { size: storageObjects.get(key)?.length ?? 0 },
+        })));
+      }
       const obj = path.match(/^\/storage\/v1\/object\/card-backgrounds\/(.+)$/);
       if (obj && method === 'POST') {
         storageObjects.set(obj[1], Buffer.from(init.body as Uint8Array));
@@ -242,6 +272,7 @@ beforeAll(async () => {
     DISCORD_CLIENT_ID: '123456789012345678',
     DISCORD_CLIENT_SECRET: 'secret-secret-secret',
     DISCORD_BOT_TOKEN: 'bot-token-bot-token-bot-token',
+    ADMIN_USER_IDS: ADMIN_ID,
     SESSION_ENCRYPTION_KEY: 'ab'.repeat(32),
     METRICS_TOKEN,
     SUPABASE_URL: SUPA,
@@ -376,8 +407,267 @@ describe('DexBotX API', () => {
 
   it('returns the current user', async () => {
     const res = await http().get('/auth/me').set(authed()).expect(200);
-    expect(res.body).toMatchObject({ id: USER_ID, username: 'tester', globalName: 'Test Er' });
+    expect(res.body).toMatchObject({ id: USER_ID, username: 'tester', globalName: 'Test Er', isAdmin: false });
     expect(res.body.avatarUrl).toContain('cdn.discordapp.com');
+  });
+
+  it('hides admin routes from logged-out users and non-admin sessions', async () => {
+    await http().get('/admin/me').expect(404);
+    await http().get('/admin/me').set(authed()).expect(404);
+  });
+
+  it('allows an admin session to access the admin identity route', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const cookie = `dexbotx_sid=${adminSession.sid}`;
+    await http().get('/admin/me').set({ Cookie: cookie }).expect(200, { admin: true });
+    await http().get('/auth/me').set({ Cookie: cookie }).expect(200).expect(({ body }) => {
+      expect(body.isAdmin).toBe(true);
+    });
+  });
+
+  it('serves sanitized recent users and revokes their sessions', async () => {
+      const adminSession = await app.get(SessionService).create(
+        { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+        { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+      );
+      await app.get(RedisService).client.lpush('stat:ev:recent_logins', JSON.stringify({
+        id: USER_ID,
+        username: 'tester',
+        avatarHash: null,
+        at: new Date().toISOString(),
+      }));
+      const revokedSession = await app.get(SessionService).create(
+        { id: '666666666666666666', username: 'revoke-me', global_name: null, avatar: null },
+        { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+      );
+      const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+      const users = await http().get('/admin/users').set(cookie).expect(200);
+      expect(users.body.activeSessions).toEqual(expect.any(Number));
+      expect(users.body.recentLogins[0]).toMatchObject({ id: USER_ID, username: 'tester' });
+      expect(Object.keys(users.body.recentLogins[0]).sort()).toEqual(['avatar', 'id', 'username']);
+      await http().post('/admin/users/666666666666666666/revoke').set(cookie).expect(201, { revoked: 1 });
+      expect(await app.get(SessionService).get(revokedSession.sid)).toBeNull();
+  });
+
+  it('lists and confirms background deletion, clears guild references, and audits it', async () => {
+      const adminSession = await app.get(SessionService).create(
+        { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+        { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+      );
+      const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+      const path = `${G1}/${'a'.repeat(64)}.jpg`;
+      storageObjects.set(path, Buffer.from('background'));
+      const config = messageConfigSchema.parse({
+        ...validWelcome(),
+        image: { ...validWelcome().image, backgroundPath: path },
+      });
+      await app.get(DatabaseService).db.insert(guildSettings).values({
+        guildId: G1,
+        welcome: config,
+        goodbye: config,
+        updatedBy: ADMIN_ID,
+      }).onConflictDoUpdate({
+        target: guildSettings.guildId,
+        set: { welcome: config, goodbye: config, updatedBy: ADMIN_ID },
+      });
+
+      const content = await http().get('/admin/content').set(cookie).expect(200);
+      expect(content.body.backgrounds).toContainEqual(expect.objectContaining({ path, guildId: G1, size: 10 }));
+      await http().post('/admin/content/background').set(cookie).send({ path }).expect(400);
+      await http().post('/admin/content/background').set(cookie).send({ path, confirm: true }).expect(201, { ok: true });
+      expect(storageObjects.has(path)).toBe(false);
+      const settings = await app.get(DatabaseService).db.select().from(guildSettings).where(eq(guildSettings.guildId, G1));
+      expect(settings[0].welcome.image.backgroundPath).toBeNull();
+      expect(settings[0].goodbye.image.backgroundPath).toBeNull();
+      await app.get(DatabaseService).db.delete(guildSettings).where(eq(guildSettings.guildId, G1));
+  });
+
+  it('validates, persists and publicly exposes only the maintenance flag', async () => {
+      const adminSession = await app.get(SessionService).create(
+        { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+        { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+      );
+      const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+      const flags = { maintenance: true, musicEnabled: true, socialEnabled: false, messageRatePerMinute: 12 };
+      await http().put('/admin/flags').set(cookie).send({ ...flags, unexpected: true }).expect(400);
+      await http().put('/admin/flags').set(cookie).send(flags).expect(200, flags);
+      await http().get('/admin/flags').set(cookie).expect(200, flags);
+      await http().get('/flags').expect(200, { maintenance: true });
+      await http().put('/admin/flags').set(cookie).send({
+        maintenance: false,
+        musicEnabled: false,
+        socialEnabled: false,
+        messageRatePerMinute: 20,
+      }).expect(200);
+  });
+
+  it('returns newest-first paged audit events filtered by action', async () => {
+      const adminSession = await app.get(SessionService).create(
+        { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+        { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+      );
+      const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}` };
+      const response = await http().get('/admin/audit?page=1&action=settings.update_flags').set(cookie).expect(200);
+      expect(response.body).toMatchObject({ page: 1, pageSize: 50, total: 2, pages: 1 });
+      expect(response.body.items.every((event: { action: string }) => event.action === 'settings.update_flags')).toBe(true);
+  });
+
+  it('lists and returns server details through the admin API', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}` };
+    const list = await http().get('/admin/guilds?search=Alpha&page=1').set(cookie).expect(200);
+    expect(list.body).toMatchObject({ page: 1, total: 1, pages: 1 });
+    expect(list.body.guilds[0]).toMatchObject({
+      id: G1,
+      name: 'Alpha Guild',
+      memberCount: 120,
+      welcomeEnabled: false,
+      goodbyeEnabled: false,
+    });
+
+    const detail = await http().get(`/admin/guilds/${G1}`).set(cookie).expect(200);
+    expect(detail.body.guild).toMatchObject({ id: G1, name: 'Alpha Guild', ownerId: null });
+    expect(detail.body.channels).toHaveLength(2);
+  });
+
+  it('audits admin server writes and requires an exact server-name confirmation to leave', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+    const asciiConfig = messageConfigSchema.parse({ ...validWelcome(), enabled: false, channelId: null });
+    await app.get(DatabaseService).db.insert(guildSettings).values({
+      guildId: G1,
+      welcome: asciiConfig,
+      goodbye: asciiConfig,
+      updatedBy: ADMIN_ID,
+    }).onConflictDoUpdate({
+      target: guildSettings.guildId,
+      set: { welcome: asciiConfig, goodbye: asciiConfig, updatedBy: ADMIN_ID },
+    });
+    await http().post(`/admin/guilds/${G1}/disable`).set(cookie).expect(201, { ok: true });
+    await http().post(`/admin/guilds/${G1}/resync`).set(cookie).expect(201, { ok: true });
+    await http().post(`/admin/guilds/${G1}/leave`).set(cookie).send({ confirm: 'wrong name' }).expect(400);
+
+    const audit = await app.get(DatabaseService).db.select().from(adminAudit);
+    expect(audit.map((row) => row.action)).toEqual(expect.arrayContaining(['guild.disable', 'guild.resync']));
+    expect(audit.every((row) => row.adminId === ADMIN_ID)).toBe(true);
+    await app.get(DatabaseService).db.delete(guildSettings).where(eq(guildSettings.guildId, G1));
+  });
+
+  it('exposes sanitized failed-job responses and requires confirmation before clearing', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+    const failures = await http().get('/admin/failures').set(cookie).expect(200);
+    expect(Array.isArray(failures.body)).toBe(true);
+    for (const job of failures.body) {
+      expect(Object.keys(job).sort()).toEqual(['guildId', 'id', 'kind', 'reason', 'time']);
+    }
+    await http().post('/admin/failures/clear').set(cookie).send({}).expect(400);
+    await http().post('/admin/failures/clear').set(cookie).send({ confirm: true }).expect(201, { cleared: 0 });
+  });
+
+  it('returns the rate-limit metrics shape for admins', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const redis = app.get(RedisService).client;
+    const minute = Math.floor(Date.now() / 60_000);
+    const key = `stat:min:${minute}`;
+    await redis.hset(key, {
+      d_total: '25',
+      d_401: '2',
+      d_403: '3',
+      d_404: '1',
+      d_429: '4',
+      'cache:settings:hit': '8',
+      'cache:settings:miss': '2',
+      'cache:channels:hit': '1',
+      'cache:channels:miss': '3',
+      'cache:userGuilds:hit': '3',
+      'cache:userGuilds:miss': '1',
+    });
+    const event = { route: '/guilds/:id/channels', scope: 'global', retryAfter: 30, global: true, at: new Date().toISOString() };
+    await redis.lpush('stat:ev:d429', JSON.stringify(event));
+    await redis.set('discord:blocked_until', String(Date.now() + 30_000), 'EX', 30);
+
+    const res = await http().get('/admin/rate-limits').set({ Cookie: `dexbotx_sid=${adminSession.sid}` }).expect(200);
+    expect(res.body.perMinute).toHaveLength(60);
+    expect(res.body.perMinute.find((row: { minute: number }) => row.minute === minute)).toMatchObject({
+      total: 25,
+      c401: 2,
+      c403: 3,
+      c404: 1,
+      c429: 4,
+    });
+    expect(res.body.invalidLast10Min).toBeGreaterThanOrEqual(9);
+    expect(res.body.recent429[0]).toEqual(event);
+    expect(res.body.blockedUntil).toBeGreaterThan(Date.now());
+    expect(res.body.cache).toEqual({ settings: 80, channels: 25, userGuilds: 75 });
+    expect(res.body.queue).toEqual(expect.objectContaining({
+      waiting: expect.any(Number),
+      active: expect.any(Number),
+      delayed: expect.any(Number),
+      failed: expect.any(Number),
+      oldestWaitingSeconds: expect.any(Number),
+    }));
+    await redis.del('discord:blocked_until');
+  });
+
+  it('records Discord 429s and serves cached Discord data during the block', async () => {
+    const redis = app.get(RedisService).client;
+    const discord = app.get(DiscordRestService);
+    const userGuilds = app.get(GuildsService);
+    const cachedSession = await app.get(SessionService).create(
+      { id: USER_ID, username: 'tester', global_name: 'Test Er', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const session = (await app.get(SessionService).get(cachedSession.sid))!;
+
+    await redis.del('discord:blocked_until', 'discord:cache:channels:' + G1);
+    rateLimitGuildChannels = false;
+    const minuteKey = `stat:min:${Math.floor(Date.now() / 60_000)}`;
+    const totalBefore = Number(await redis.hget(minuteKey, 'd_total') ?? 0);
+    const rateLimitsBefore = Number(await redis.hget(minuteKey, 'd_429') ?? 0);
+    await discord.getGuildChannels(G1);
+    rateLimitGuildChannels = true;
+    await expect(discord.getGuildChannels(G1)).rejects.toMatchObject({ status: 429 });
+    rateLimitGuildChannels = false;
+
+    expect(Number(await redis.hget(minuteKey, 'd_total'))).toBe(totalBefore + 2);
+    expect(Number(await redis.hget(minuteKey, 'd_429'))).toBe(rateLimitsBefore + 1);
+    const blockedUntil = Number(await redis.get('discord:blocked_until'));
+    expect(blockedUntil).toBeGreaterThan(Date.now());
+    const events = (await redis.lrange('stat:ev:d429', 0, 0)).map((item) => JSON.parse(item));
+    expect(events[0]).toMatchObject({
+      route: '/guilds/:id/channels',
+      scope: 'global',
+      retryAfter: 30,
+      global: true,
+    });
+    expect(events[0].route).not.toContain(G1);
+
+    discordCalls.length = 0;
+    expect(await discord.getGuildChannels(G1)).toHaveLength(4);
+    expect(discordCalls).toHaveLength(0);
+
+    const cachedGuilds = [{ id: G1, name: 'Alpha', icon: null, owner: false, permissions: '32' }];
+    await redis.set(`ug:${USER_ID}`, JSON.stringify(cachedGuilds), 'EX', 60);
+    expect(await userGuilds.getUserGuilds(session)).toEqual(cachedGuilds);
+    expect(discordCalls).toHaveLength(0);
+
+    await redis.del('discord:blocked_until', `ug:${USER_ID}`, `discord:cache:channels:${G1}`);
   });
 
   it('lists only servers the user can manage, flagging where the bot is missing', async () => {
@@ -783,6 +1073,14 @@ describe('Bot → queue → worker', () => {
       await new Promise((r) => setTimeout(r, 50));
     }
   };
+
+  it('skips all member-event posts while maintenance mode is enabled', async () => {
+    const redis = botModule.get(RedisService).client;
+    await redis.hset('flags', { maintenance: 'true' });
+    await handle('welcome', fakeMember({ userId: '888333888333888333' }));
+    expect(await totalJobs()).toBe(0);
+    await redis.hset('flags', { maintenance: 'false' });
+  });
 
   it('queues nothing when the feature is disabled, the member is a bot, permissions are missing or the channel is foreign', async () => {
     await handle('goodbye', fakeMember()); // goodbye is disabled by default

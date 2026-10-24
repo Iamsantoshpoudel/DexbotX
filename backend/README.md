@@ -41,12 +41,15 @@ Or with Docker (API + bot + worker + Redis + one-shot migration): set `REDIS_PAS
 - `DATABASE_URL`: the **session pooler** string (port 5432) or the direct connection. Do not use the transaction pooler (6543) for these long-running servers.
 - Run `npm run db:migrate` once per deploy.
 - Migration `0001_guild_data` renames the guild key/flags to `guild_id` and `bot_present`, adds guild-scoped channel, role, and template tables plus `last_synced_at`, preserves existing rows, and removes the cascading-delete behavior. Existing Redis/API-only channel data has no durable SQL source, so run `npm run db:backfill-guild-data` after migration (or let bot startup/periodic sync populate active guilds).
+- Migration `0002_admin_operations` adds `guilds.last_message_at` and the `admin_audit` table. Apply all migrations before starting updated API, bot, or worker processes; all processes must connect to the same database.
 - Row Level Security is already enabled on every table by the migration (no policies), so Supabase's public REST API cannot read or write your data. Only this backend, connecting as the database owner, can. An e2e test fails if a table is added without RLS.
 - Custom card backgrounds (optional): set `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (service role, server-side only). The backend creates a **private** bucket on first upload; without these variables uploads are disabled.
 - Use a paid project in production: free projects pause when idle, which would take the bot offline.
 
 ## Environment
 See `.env.example`. Required: `WEB_URL`, `DATABASE_URL`, `REDIS_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `SESSION_ENCRYPTION_KEY` (`openssl rand -hex 32`). Invalid config stops the process at boot with a readable list of problems.
+
+`ADMIN_USER_IDS` is a comma-separated list of Discord user IDs (17–20 digits) allowed into the admin console, for example `123456789012345678,234567890123456789`. It defaults to empty, which disables admin access for everyone. Configure it only on backend processes; frontend state is never used to authorize admin requests.
 
 ## Production on Render
 
@@ -77,8 +80,33 @@ After deployment, `/auth/login` should redirect to Discord with that callback UR
 | POST | `/guilds/:guildId/assets/background` | multipart field `file`; validated and re-encoded to JPEG (2 MB cap, decompression-bomb safe), stored privately; returns a `path` for `image.backgroundPath` |
 | POST | `/guilds/:guildId/messages/:kind/test` | posts a test message; explains missing channel permissions instead of failing silently |
 | GET | `/templates/presets` | public, cacheable preset templates |
+| GET | `/flags` | public, cached flag endpoint exposing only `maintenance` |
 | GET | `/health` · `/health/ready` | liveness and readiness (database + Redis) |
 | GET | `/metrics` | Prometheus; needs `Authorization: Bearer $METRICS_TOKEN`, disabled when unset |
+
+### Admin API
+
+All `/admin/*` routes require a valid session and a user ID listed in `ADMIN_USER_IDS`. Unauthorized requests deliberately return 404. State-changing admin requests require the dashboard origin and are recorded in `admin_audit`. The Admin link in the frontend is only a convenience; it is not an authorization boundary.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/admin/me` | verifies admin access |
+| GET | `/admin/overview` | service health, totals, shard activity, charts, and queue state |
+| GET | `/admin/rate-limits` | Discord API call counts, recent 429s, cache hit rates, and cooldown |
+| GET | `/admin/guilds?search=&page=` | searchable installed guild list |
+| GET | `/admin/guilds/:id` | guild settings, channel posting status, and recent failures |
+| POST | `/admin/guilds/:id/resync` · `/disable` | invalidate cached guild data or disable welcome and goodbye |
+| POST | `/admin/guilds/:id/leave` | requires `{ "confirm": "<exact guild name>" }` |
+| GET | `/admin/failures` | sanitized failed-job details |
+| POST | `/admin/failures/:jobId/retry` · `/admin/failures/clear` | retry a failed job or clear all after confirmation |
+| GET | `/admin/users` | recent login IDs/usernames/avatars and active session count; excludes emails and tokens |
+| POST | `/admin/users/:id/revoke` | revoke all Redis sessions for a user |
+| GET | `/admin/content` | preset usage and stored background metadata |
+| POST | `/admin/content/background` | delete with `{ "path": "...", "confirm": true }`; clears references in guild settings |
+| GET | `/admin/flags` · PUT `/admin/flags` | read or validate/update the Redis-backed feature flags |
+| GET | `/admin/audit?page=&action=` | newest-first, 50 records per page; optional exact action filter |
+
+Feature flags are `maintenance` (boolean), `musicEnabled` (boolean), `socialEnabled` (boolean), and `messageRatePerMinute` (integer from 0 to 1000). Maintenance skips all welcome and goodbye posts; a zero message rate pauses them. The API and bot read the same Redis hash so changes are shared across processes. Public `GET /flags` returns only the maintenance state and caches it for 30 seconds.
 
 ## Performance
 - The API enables gzip/Brotli response compression and emits a `Server-Timing: app;dur=...` header on responses.

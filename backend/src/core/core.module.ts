@@ -4,6 +4,8 @@ import { DatabaseService } from '../db/database.service';
 import { RateLimiter } from '../redis/rate-limiter.service';
 import { RedisService } from '../redis/redis.service';
 import { SettingsCache } from '../redis/settings-cache.service';
+import { StatsService } from '../admin/stats.service';
+import { FeatureFlagsService } from './feature-flags.service';
 import { APP_CONFIG, AppConfig, loadConfig } from './config';
 
 /** Infrastructure shared by the API process and every bot shard process. */
@@ -16,6 +18,16 @@ import { APP_CONFIG, AppConfig, loadConfig } from './config';
         return {
           pinoHttp: {
             level: config.logLevel,
+            serializers: {
+              req: (req) => ({
+                id: req.id,
+                method: req.method,
+                path: req.url?.split('?')[0],
+              }),
+              res: (res) => ({ statusCode: res.statusCode }),
+            },
+            customSuccessMessage: (req, res) =>
+              `${req.method} ${req.url?.split('?')[0]} ${res.statusCode}`,
             redact: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'],
             autoLogging: { ignore: (req) => /^\/(health|metrics)/.test(req.url ?? '') },
             // Pretty logs only in local development; production emits JSON for log aggregation.
@@ -31,7 +43,9 @@ import { APP_CONFIG, AppConfig, loadConfig } from './config';
     RedisService,
     RateLimiter,
     SettingsCache,
+    StatsService,
+    FeatureFlagsService,
   ],
-  exports: [APP_CONFIG, DatabaseService, RedisService, RateLimiter, SettingsCache],
+  exports: [APP_CONFIG, DatabaseService, RedisService, RateLimiter, SettingsCache, StatsService, FeatureFlagsService],
 })
 export class CoreModule {}

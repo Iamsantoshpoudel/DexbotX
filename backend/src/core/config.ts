@@ -23,6 +23,10 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake'),
   DISCORD_CLIENT_SECRET: z.string().min(10),
   DISCORD_BOT_TOKEN: z.string().min(20),
+  ADMIN_USER_IDS: z.preprocess(
+    (value) => typeof value === 'string' ? value.split(',').map((id) => id.trim()).filter(Boolean) : value,
+    z.array(z.string().regex(/^\d{17,20}$/)),
+  ).default([]),
   /** Permission integer used in the invite link. Includes Manage Roles for per-channel permission repair; never Administrator. */
   BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('268487680'),
   /** "auto" lets Discord choose the shard count, or set a fixed number. */
@@ -77,6 +81,7 @@ export interface AppConfig {
   discordClientId: string;
   discordClientSecret: string;
   discordBotToken: string;
+  adminUserIds: string[];
   botPermissions: string;
   shardCount: 'auto' | number;
   sessionKey: Buffer;
@@ -124,6 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     discordClientId: e.DISCORD_CLIENT_ID,
     discordClientSecret: e.DISCORD_CLIENT_SECRET,
     discordBotToken: e.DISCORD_BOT_TOKEN,
+    adminUserIds: e.ADMIN_USER_IDS,
     botPermissions: e.BOT_PERMISSIONS,
     shardCount: e.SHARD_COUNT === 'auto' ? 'auto' : Number(e.SHARD_COUNT),
     sessionKey: Buffer.from(e.SESSION_ENCRYPTION_KEY, 'hex'),

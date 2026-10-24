@@ -41,6 +41,7 @@ export interface Me {
   username: string;
   globalName: string | null;
   avatarUrl: string;
+  isAdmin: boolean;
 }
 
 export interface GuildSummary {

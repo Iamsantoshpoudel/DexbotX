@@ -13,6 +13,7 @@ export const guilds = pgTable('guilds', {
   joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
   leftAt: timestamp('left_at', { withTimezone: true }),
   lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
@@ -76,6 +77,19 @@ export const auditLogs = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('audit_logs_guild_created_idx').on(t.guildId, t.createdAt)],
+).enableRLS();
+
+export const adminAudit = pgTable(
+  'admin_audit',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    adminId: text('admin_id').notNull(),
+    action: text('action').notNull(),
+    target: text('target').notNull(),
+    details: jsonb('details').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('admin_audit_created_idx').on(t.createdAt)],
 ).enableRLS();
 
 export type GuildRow = typeof guilds.$inferSelect;

@@ -54,6 +54,13 @@ function makeService() {
           return [];
         }),
       })),
+      update: jest.fn(() => ({
+        set: jest.fn(() => ({
+          where: jest.fn(() => ({
+            returning: jest.fn(async () => [{ id: 'guild-123' }]),
+          })),
+        })),
+      })),
     },
   } as unknown as DatabaseService;
   const redisClient = {
@@ -78,8 +85,9 @@ function makeService() {
     ]),
   } as unknown as DiscordRestService;
   const settings = { get: jest.fn(async () => ({ welcome: {}, goodbye: {} })) } as unknown as SettingsCache;
-  const service = new GuildSyncService(database, redis, discord, settings);
-  return { service, database, redisClient, discord, deletes, inserts };
+  const stats = { incr: jest.fn(async (_name: string) => undefined) };
+  const service = new GuildSyncService(database, redis, discord, settings, stats as never);
+  return { service, database, redisClient, discord, stats, deletes, inserts };
 }
 
 describe('GuildSyncService', () => {
@@ -108,6 +116,14 @@ describe('GuildSyncService', () => {
     expect(redisClient.set).toHaveBeenCalledWith('guild:guild-123:refresh-cooldown', '1', 'EX', 30, 'NX');
   });
 
+  it('records guild joins and leaves', async () => {
+    const { service, stats } = makeService();
+    await service.upsert({ id: 'guild-123' } as never);
+    await service.markLeft('guild-123');
+    expect(stats.incr).toHaveBeenCalledWith('guild_joins');
+    expect(stats.incr).toHaveBeenCalledWith('guild_leaves');
+  });
+
   it('invalidates the exact channel key after an incremental channel write', async () => {
     const { service, redisClient } = makeService();
 
@@ -121,5 +137,16 @@ describe('GuildSyncService', () => {
 
     expect(redisClient.del).toHaveBeenCalledWith(guildChannelsCacheKey('guild-123'));
     expect(redisClient.publish).toHaveBeenCalledWith(GUILD_CHANNELS_CHANGED_CHANNEL, 'guild-123');
+  });
+
+  it('uses a safe position when a role-create event has no position yet', async () => {
+    const { service, inserts } = makeService();
+
+    await service.upsertRole('guild-123', { id: 'role-new', name: 'DexBotX', color: 0 });
+
+    expect(inserts).toContainEqual({
+      table: guildRoles,
+      values: { guildId: 'guild-123', id: 'role-new', name: 'DexBotX', color: 0, position: 0 },
+    });
   });
 });

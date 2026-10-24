@@ -16,6 +16,7 @@ import {
 } from '../guilds/guild-events';
 import { RedisService } from '../redis/redis.service';
 import { SettingsCache } from '../redis/settings-cache.service';
+import { StatsService } from '../admin/stats.service';
 
 const CHANNELS_TTL_SECONDS = 12 * 60;
 const ROLES_TTL_SECONDS = 12 * 60;
@@ -51,6 +52,7 @@ export class GuildSyncService {
     private readonly redis: RedisService,
     private readonly discord: DiscordRestService,
     private readonly settings: SettingsCache,
+    private readonly stats: StatsService,
   ) {}
 
   private toGuildRow(g: Guild) {
@@ -94,6 +96,7 @@ export class GuildSyncService {
   async upsert(g: Guild): Promise<void> {
     await this.upsertMany([g]);
     await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, g.id);
+    await this.stats.incr('guild_joins');
   }
 
   async notifyReconciled(): Promise<void> {
@@ -109,6 +112,7 @@ export class GuildSyncService {
     if (updated.length > 0) {
       await this.redis.client.del(guildMetaCacheKey(guildId));
       await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, guildId);
+      await this.stats.incr('guild_leaves');
     }
   }
 
@@ -265,10 +269,19 @@ export class GuildSyncService {
     await this.invalidateChannels(guildId);
   }
 
-  async upsertRole(guildId: string, role: CachedRole): Promise<void> {
+  async upsertRole(
+    guildId: string,
+    role: Pick<CachedRole, 'id' | 'name' | 'color'> & Partial<Pick<CachedRole, 'position'>>,
+  ): Promise<void> {
     await this.database.db
       .insert(guildRoles)
-      .values({ guildId, ...role })
+      .values({
+        guildId,
+        id: role.id,
+        name: role.name,
+        color: role.color,
+        position: Number.isFinite(role.position) ? role.position! : 0,
+      })
       .onConflictDoUpdate({
         target: [guildRoles.guildId, guildRoles.id],
         set: { name: sql`excluded.name`, color: sql`excluded.color`, position: sql`excluded.position` },

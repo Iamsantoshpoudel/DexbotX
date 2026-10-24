@@ -14,7 +14,9 @@ envVarGroups:
       - key: DATABASE_POOL_MAX
         value: "10"
       - key: BOT_PERMISSIONS
-        value: "52224"
+        value: "268487680"
+      - key: ADMIN_USER_IDS
+        value: ""
       - key: SHARD_COUNT
         value: auto
       - key: SESSION_TTL_SECONDS

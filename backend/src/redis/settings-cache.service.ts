@@ -10,6 +10,7 @@ import {
 } from '../shared/message-config';
 import { GUILD_SETTINGS_CHANGED_CHANNEL, guildSettingsCacheKey } from '../guilds/guild-events';
 import { RedisService } from './redis.service';
+import { StatsService } from '../admin/stats.service';
 
 const REDIS_TTL_SECONDS = 60 * 60;
 const L1_TTL_MS = 60 * 1000;
@@ -33,6 +34,7 @@ export class SettingsCache implements OnModuleInit {
   constructor(
     private readonly redis: RedisService,
     private readonly database: DatabaseService,
+    private readonly stats: StatsService,
   ) {}
 
   onModuleInit(): void {
@@ -46,17 +48,24 @@ export class SettingsCache implements OnModuleInit {
   async get(guildId: string): Promise<GuildMessages> {
     const now = Date.now();
     const hit = this.l1.get(guildId);
-    if (hit && hit.expires > now) return hit.value;
+    if (hit && hit.expires > now) {
+      await this.stats.hit('settings');
+      return hit.value;
+    }
 
     let value: GuildMessages | null = null;
     try {
       const cached = await this.redis.client.get(guildSettingsCacheKey(guildId));
-      if (cached) value = this.parse(JSON.parse(cached));
+      if (cached) {
+        value = this.parse(JSON.parse(cached));
+        await this.stats.hit('settings');
+      }
     } catch (err) {
       this.logger.warn(`Redis read failed for ${guildId}: ${(err as Error).message}`);
     }
 
     if (!value) {
+      await this.stats.miss('settings');
       value = await this.loadFromDb(guildId);
       this.redis.client
         .set(guildSettingsCacheKey(guildId), JSON.stringify(value), 'EX', REDIS_TTL_SECONDS)

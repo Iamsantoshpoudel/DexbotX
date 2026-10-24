@@ -10,6 +10,10 @@ import { SettingsCache } from '../redis/settings-cache.service';
 import { AssetFetcher } from '../render/asset-fetcher.service';
 import { MessageBuilder } from '../render/message-builder.service';
 import { AssetStorage } from '../storage/asset-storage.service';
+import { StatsService } from '../admin/stats.service';
+import { DatabaseService } from '../db/database.service';
+import { guilds } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 /** A welcome that is this late is more confusing than helpful. */
 const MAX_JOB_AGE_MS = 30 * 60 * 1000;
@@ -35,6 +39,8 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
     private readonly discord: DiscordRestService,
     private readonly channelAccess: ChannelAccessService,
     private readonly metrics: MetricsService,
+    private readonly stats: StatsService,
+    private readonly database: DatabaseService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -46,10 +52,30 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
       // Global cap across all workers; Discord's own per-channel limits are handled by 429 back-off below.
       limiter: { max: 40, duration: 1000 },
     });
-    this.worker.on('completed', (_job, result) => this.metrics.memberEvents.inc({ result }));
+    this.worker.on('completed', (job, result) => {
+      this.metrics.memberEvents.inc({ result });
+      if (result === 'sent') {
+        void this.stats.incr('msg_sent');
+        void this.database.db.update(guilds)
+          .set({ lastMessageAt: new Date() })
+          .where(eq(guilds.id, job.data.guildId))
+          .catch((error: unknown) => this.logger.warn(`Could not record last message time: ${error instanceof Error ? error.message : String(error)}`));
+      }
+    });
     this.worker.on('failed', (job, err) => {
       const final = !job || job.attemptsMade >= (job.opts.attempts ?? 1) || err instanceof UnrecoverableError;
-      if (final) this.metrics.memberEvents.inc({ result: 'failed' });
+      if (final) {
+        this.metrics.memberEvents.inc({ result: 'failed' });
+        void this.stats.incr('msg_failed');
+        if (job) {
+          void this.stats.pushEvent('failed_posts', {
+            guildId: job.data.guildId,
+            kind: job.data.kind,
+            reason: err.message,
+            at: new Date().toISOString(),
+          });
+        }
+      }
       this.logger.warn(`Job ${job?.id} failed (attempt ${job?.attemptsMade}): ${err.message}`);
     });
     this.worker.on('error', (err) => this.logger.error(`Worker error: ${err.message}`));

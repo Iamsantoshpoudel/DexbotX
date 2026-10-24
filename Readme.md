@@ -12,6 +12,7 @@ DexBotX is a Discord bot and web dashboard for configuring welcome and goodbye m
 - Update bot-installed server status in an open dashboard when the bot joins or leaves, without periodic guild-list polling.
 - Cache server/channel display metadata per signed-in Discord user in local storage for faster dashboard reloads; the API still refreshes and validates it, while message settings remain server-authoritative.
 - Process join/leave events through a Redis-backed queue so image rendering and posting do not block the Discord gateway.
+- Operate the bot from a private admin console with service health, rate-limit, server, failure, user, content, settings, and audit views.
 
 ## How it works: browser to Discord channel
 
@@ -78,9 +79,25 @@ The user's OAuth session and the bot token are separate credentials: OAuth is fo
 | Redis | Sessions, rate limits, caches, pub/sub, and BullMQ jobs |
 | Supabase Storage (optional) | Private storage for custom card backgrounds |
 
+## Admin console
+
+The Next.js admin console is available at `/admin` and includes:
+
+- **Overview:** API, Redis, database, bot and worker health; server/message totals; shard status; activity charts; queue counts.
+- **Rate limits:** Discord API call counts, recent 429 responses, cache hit rates and the current Discord cooldown.
+- **Servers and failures:** search installed servers, inspect configured welcome/goodbye channels, resync or disable settings, leave a server with an exact-name confirmation, and retry or clear failed jobs.
+- **Users and content:** recent sign-ins, active sessions, session revocation, preset usage, and stored custom backgrounds.
+- **Settings and audit:** global maintenance/feature flags and a paged, action-filtered record of admin changes.
+
+Admin access is controlled only by the backend. Set `ADMIN_USER_IDS` on the backend to a comma-separated list of Discord user IDs (17–20 digits); the default is empty, which disables admin access for everyone. A valid Discord session is also required. Unauthenticated and non-admin requests to `/admin` APIs receive a masked 404. State-changing admin requests are protected by the same origin/CSRF check as other API writes. The frontend menu link is only a convenience and is not an authorization check.
+
+Maintenance mode makes the bot skip all welcome and goodbye posts. `messageRatePerMinute` sets the per-server posting limit; `0` pauses posts. Feature flags are shared through Redis across the API, bot, and worker. The unauthenticated `GET /flags` endpoint exposes only the maintenance state for the public dashboard.
+
+The API and web implementation details are in [`backend/README.md`](./backend/README.md) and [`frontend/README.md`](./frontend/README.md).
+
 ## Requirements
 
-- Node.js 20 or newer and npm.
+- Node.js 22 or newer and npm.
 - A Redis server reachable by the backend.
 - A Supabase Postgres database (or another compatible PostgreSQL database).
 - A Discord application and bot. The bot requires the **Server Members Intent** in the Discord Developer Portal to receive join/leave events.
@@ -107,6 +124,7 @@ Fill in `backend/.env`. Required values include:
 | `DISCORD_CLIENT_SECRET` | Discord OAuth2 client secret |
 | `DISCORD_BOT_TOKEN` | Discord bot token; keep it private |
 | `SESSION_ENCRYPTION_KEY` | 32-byte key encoded as 64 hexadecimal characters |
+| `ADMIN_USER_IDS` | Optional comma-separated Discord IDs allowed to access `/admin`; empty disables admin access |
 
 Generate a session encryption key, for example:
 
@@ -275,6 +293,7 @@ Run commands from `backend/` or `frontend/` as appropriate:
 | `npm run build` | `backend/`, `frontend/` | Production build |
 | `npm run db:generate` | `backend/` | Generate migration from schema changes |
 | `npm run db:migrate` | `backend/` | Apply database migrations |
+| `npm run lint` | `backend/`, `frontend/` | Lint source files |
 
 Backend health endpoints:
 
@@ -291,4 +310,4 @@ Backend health endpoints:
 
 ## More documentation
 
-See [`backend/README.md`](./backend/README.md) for backend API details, security behavior, scaling notes, environment configuration, and testing information.
+See [`backend/README.md`](./backend/README.md) for backend API details, admin API routes, security behavior, scaling notes, environment configuration, and testing information. See [`frontend/README.md`](./frontend/README.md) for the Next.js app, frontend environment variables, admin pages, and frontend commands.

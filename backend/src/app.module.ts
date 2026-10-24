@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AssetsModule } from './assets/assets.module';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { RequestGuard } from './common/request.guard';
@@ -13,7 +14,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { WelcomeModule } from './welcome/welcome.module';
 
 @Module({
-  imports: [CoreModule, AuthModule, GuildsModule, WelcomeModule, AssetsModule, TemplatesModule, HealthModule, MetricsModule],
+  imports: [CoreModule, AdminModule, AuthModule, GuildsModule, WelcomeModule, AssetsModule, TemplatesModule, HealthModule, MetricsModule],
   providers: [
     { provide: APP_GUARD, useClass: RequestGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -46,7 +46,7 @@ describe('PerformanceHeadersInterceptor', () => {
 
     await expect(revalidated.result).resolves.toBeUndefined();
     expect(revalidated.response.status).toHaveBeenCalledWith(304);
-    expect(revalidated.response.end).toHaveBeenCalled();
+    expect(revalidated.response.end).not.toHaveBeenCalled();
   });
 
   it('preserves explicit public caching and leaves non-GET responses alone', async () => {

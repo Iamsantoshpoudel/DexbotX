@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 /**
- * Cheap gate for /dashboard: no session cookie means no point rendering the page, so start the Discord login
+ * Cheap gate for authenticated pages: no session cookie means no point rendering the page, so start the Discord login
  * right away and return here afterwards. This only checks that a cookie EXISTS. The API validates the session
  * on every request (and answers 401, which sends the user back through login), so this is never the security boundary.
  */
@@ -15,4 +15,4 @@ export function proxy(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ['/dashboard/:path*'] };
+export const config = { matcher: ['/dashboard/:path*', '/admin/:path*'] };

@@ -65,6 +65,7 @@ export class AuthController {
       username: session.username,
       globalName: session.globalName,
       avatarUrl: userAvatarUrl(session.userId, session.avatarHash, 128),
+      isAdmin: this.config.adminUserIds.includes(session.userId),
     };
   }
 }

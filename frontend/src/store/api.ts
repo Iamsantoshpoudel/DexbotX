@@ -35,7 +35,11 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
     toast.error(rateLimitMessage(parseRetryAfter(result.meta?.response?.headers.get('retry-after'))), { id: 'rate-limit' });
   }
   // Expired or missing session inside the dashboard: restart the login flow and come back to the same page.
-  if (result.error?.status === 401 && typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard')) {
+  if (
+    result.error?.status === 401 &&
+    typeof window !== 'undefined' &&
+    (window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/admin'))
+  ) {
     window.location.assign(loginUrl(window.location.pathname));
   }
   return result;

@@ -1,6 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../core/config';
 import type { BuiltMessage } from '../render/message-builder.service';
+import { StatsService } from '../admin/stats.service';
+import { RedisService } from '../redis/redis.service';
 
 const API = 'https://discord.com/api/v10';
 const USER_AGENT = 'DiscordBot (https://dexbotx.app, 1.0.0)';
@@ -50,6 +52,8 @@ export interface DiscordChannel {
   name: string;
   position: number;
   parent_id: string | null;
+  permission_overwrites?: Array<{ id: string; type: number; allow: string; deny: string }>;
+  guild_id?: string;
 }
 
 export interface DiscordGuild {
@@ -71,7 +75,13 @@ export interface DiscordRole {
 
 @Injectable()
 export class DiscordRestService {
-  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {}
+  private readonly logger = new Logger(DiscordRestService.name);
+
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    private readonly stats: StatsService,
+    private readonly redis: RedisService,
+  ) {}
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
     const res = await fetch(`${API}${path}`, {
@@ -79,6 +89,10 @@ export class DiscordRestService {
       headers: { 'User-Agent': USER_AGENT, ...(init.headers ?? {}) },
       signal: AbortSignal.timeout(10_000),
     });
+    await this.stats.incr('d_total');
+    if ([401, 403, 404, 429].includes(res.status)) {
+      await this.stats.incr(`d_${res.status}`);
+    }
     if (res.status === 204) return undefined as T;
     const text = await res.text();
     let body: unknown;
@@ -90,9 +104,35 @@ export class DiscordRestService {
     if (!res.ok) {
       const errorBody = isRecord(body) ? body : undefined;
       const retryAfterValue = errorBody?.retry_after;
+      const retryAfterValueFromResponse = typeof retryAfterValue === 'number' || typeof retryAfterValue === 'string'
+        ? Number(retryAfterValue)
+        : Number(res.headers.get('retry-after') ?? 1);
       const retryAfter = res.status === 429
-        ? Number(typeof retryAfterValue === 'number' || typeof retryAfterValue === 'string' ? retryAfterValue : res.headers.get('retry-after') ?? 1)
+        ? Number.isFinite(retryAfterValueFromResponse) && retryAfterValueFromResponse >= 0
+          ? retryAfterValueFromResponse
+          : 1
         : undefined;
+      if (res.status === 429 && retryAfter !== undefined) {
+        const route = path.split('?')[0].replace(/\/\d{17,20}(?=\/|$)/g, '/:id');
+        const global = isRecord(body) && body.global === true;
+        await this.stats.pushEvent('d429', {
+          route,
+          scope: res.headers.get('x-ratelimit-scope'),
+          retryAfter,
+          global,
+          at: new Date().toISOString(),
+        });
+        try {
+          await this.redis.client.set(
+            'discord:blocked_until',
+            String(Date.now() + Math.ceil(retryAfter * 1000)),
+            'EX',
+            Math.max(1, Math.ceil(retryAfter)),
+          );
+        } catch (error) {
+          this.logger.warn(`Discord cooldown write failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
       const discordCode = typeof errorBody?.code === 'number' ? errorBody.code : undefined;
       const message = typeof errorBody?.message === 'string' ? errorBody.message : `Discord API error ${res.status}`;
       throw new DiscordApiError(res.status, discordCode, message, retryAfter);
@@ -156,8 +196,38 @@ export class DiscordRestService {
 
   // ---- Bot REST ----
 
-  getGuildChannels(guildId: string): Promise<DiscordChannel[]> {
-    return this.request<DiscordChannel[]>(`/guilds/${guildId}/channels`, { headers: this.bot() });
+  async getGuildChannels(guildId: string): Promise<DiscordChannel[]> {
+    const key = `discord:cache:channels:${guildId}`;
+    const cached = await this.redis.client.get(key);
+    const blockedUntil = Number(await this.redis.client.get('discord:blocked_until'));
+    if (blockedUntil > Date.now()) {
+      if (cached) return JSON.parse(cached) as DiscordChannel[];
+      throw new DiscordApiError(429, undefined, 'Discord is temporarily rate limited and no cached channels are available.', Math.ceil((blockedUntil - Date.now()) / 1000));
+    }
+
+    const channels = await this.request<DiscordChannel[]>(`/guilds/${guildId}/channels`, { headers: this.bot() });
+    try {
+      await this.redis.client.set(key, JSON.stringify(channels), 'EX', 12 * 60 * 60);
+    } catch (error) {
+      this.logger.warn(`Discord channel cache write failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return channels;
+  }
+
+  async canBotPost(channelId: string): Promise<boolean> {
+    const channel = await this.request<DiscordChannel>(`/channels/${channelId}`, { headers: this.bot() });
+    const overwrites = channel.permission_overwrites ?? [];
+    const denies = overwrites.filter((overwrite) =>
+      overwrite.id === this.config.discordClientId || (overwrite.type === 0 && overwrite.id === channel.guild_id),
+    );
+    const denied = denies.reduce((bits, overwrite) => bits | BigInt(overwrite.deny), 0n);
+    const allowed = denies.reduce((bits, overwrite) => bits | BigInt(overwrite.allow), 0n);
+    const required = (1n << 10n) | (1n << 11n);
+    return (denied & required & ~allowed) === 0n;
+  }
+
+  async leaveGuild(guildId: string): Promise<void> {
+    await this.request<void>(`/users/@me/guilds/${guildId}`, { method: 'DELETE', headers: this.bot() });
   }
 
   getGuildRoles(guildId: string): Promise<DiscordRole[]> {

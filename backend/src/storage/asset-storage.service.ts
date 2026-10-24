@@ -95,6 +95,71 @@ export class AssetStorage {
     }
   }
 
+  async listBackgrounds(): Promise<Array<{ path: string; guildId: string; size: number; uploadedAt: string | null }>> {
+    if (!this.enabled) return [];
+    const backgrounds: Array<{ path: string; guildId: string; size: number; uploadedAt: string | null }> = [];
+    const roots = await this.listObjects('');
+    for (const folder of roots.filter((entry) => entry.id === null && /^\d{17,20}$/.test(entry.name))) {
+      const guildId = folder.name;
+      const objects = await this.listObjects(`${guildId}/`);
+      for (const object of objects) {
+        const path = `${guildId}/${object.name}`;
+        if (!BACKGROUND_PATH_RE.test(path)) continue;
+        backgrounds.push({
+          path,
+          guildId,
+          size: Number(object.metadata?.size ?? object.metadata?.contentLength ?? 0),
+          uploadedAt: object.created_at ?? object.updated_at ?? null,
+        });
+      }
+    }
+    return backgrounds;
+  }
+
+  async deleteBackground(path: string): Promise<void> {
+    if (!this.enabled) throw new ServiceUnavailableException('Uploads are not configured on this server');
+    if (!BACKGROUND_PATH_RE.test(path)) throw new Error('invalid storage path');
+    const response = await fetch(`${this.config.supabaseUrl}/storage/v1/object/${this.config.supabaseBucket}`, {
+      method: 'DELETE',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ prefixes: [path] }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) {
+      this.logger.error(`Storage delete failed: ${response.status}`);
+      throw new ServiceUnavailableException('Could not delete the background right now.');
+    }
+    this.cache.delete(path);
+  }
+
+  private async listObjects(prefix: string): Promise<Array<{
+    id: string | null;
+    name: string;
+    created_at?: string;
+    updated_at?: string;
+    metadata?: Record<string, unknown>;
+  }>> {
+    const response = await fetch(`${this.config.supabaseUrl}/storage/v1/object/list/${this.config.supabaseBucket}`, {
+      method: 'POST',
+      headers: this.headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ prefix, limit: 1000, offset: 0, sortBy: { column: 'name', order: 'asc' } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok) {
+      this.logger.error(`Storage list failed: ${response.status}`);
+      throw new ServiceUnavailableException('Could not list stored backgrounds right now.');
+    }
+    const result: unknown = await response.json();
+    if (!Array.isArray(result)) throw new ServiceUnavailableException('Storage returned an invalid object list.');
+    return result as Array<{
+      id: string | null;
+      name: string;
+      created_at?: string;
+      updated_at?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+  }
+
   private remember(path: string, data: Buffer): void {
     if (this.cache.size >= MAX_ENTRIES) {
       const oldest = this.cache.keys().next().value;

@@ -30,7 +30,7 @@ export class PerformanceHeadersInterceptor implements NestInterceptor {
 
         const requestTag = request.get('if-none-match');
         if (requestTag && requestTag.split(',').some((candidate) => candidate.trim() === '*' || candidate.trim() === etag)) {
-          response.status(304).end();
+          response.status(304);
           return undefined;
         }
         return body;

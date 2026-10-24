@@ -1,7 +1,8 @@
 'use client';
 
-import { LogOut } from 'lucide-react';
+import { LayoutDashboard, LogOut } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useLogoutMutation } from '@/store/api';
 import type { Me } from '@/lib/types';
@@ -48,6 +49,16 @@ export function UserMenu({ me }: { me: Me }) {
             Signed in as
             <div className="truncate text-sm text-foreground">@{me.username}</div>
           </div>
+          {me.isAdmin && (
+            <Link
+              href="/admin"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-foreground hover:bg-muted"
+            >
+              <LayoutDashboard className="size-4" /> Admin
+            </Link>
+          )}
           <button
             role="menuitem"
             onClick={onLogout}

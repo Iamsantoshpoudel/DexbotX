@@ -1,5 +1,6 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../core/config';
+import { StatsService } from '../admin/stats.service';
 import { DiscordRestService } from '../discord/discord-rest.service';
 import { RedisService } from '../redis/redis.service';
 import { randomToken } from '../shared/crypto';
@@ -21,6 +22,7 @@ export class AuthService {
     private readonly redis: RedisService,
     private readonly discord: DiscordRestService,
     private readonly sessions: SessionService,
+    private readonly stats: StatsService,
   ) {}
 
   async startLogin(returnTo: unknown): Promise<{ url: string; state: string }> {
@@ -56,6 +58,13 @@ export class AuthService {
     }
     const user = await this.discord.getCurrentUser(token.access_token);
     const { sid, ttlSeconds } = await this.sessions.create(user, token);
+    await this.stats.addUnique('logins', user.id);
+    await this.stats.pushEvent('recent_logins', {
+      id: user.id,
+      username: user.username,
+      avatarHash: user.avatar,
+      at: new Date().toISOString(),
+    });
     return { sid, ttlSeconds, returnTo: safeReturnTo(returnTo) };
   }
 

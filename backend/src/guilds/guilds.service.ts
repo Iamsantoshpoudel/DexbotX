@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { SessionService } from '../auth/session.service';
 import type { SessionData } from '../common/types';
@@ -10,6 +10,7 @@ import { RedisService } from '../redis/redis.service';
 import { guildChannelsCacheKey, guildMetaCacheKey } from './guild-events';
 import { guildBannerUrl, guildIconUrl } from '../shared/discord-cdn';
 import { canManageGuild } from '../shared/permissions';
+import { StatsService } from '../admin/stats.service';
 
 const USER_GUILDS_TTL = 60;
 const CHANNELS_TTL = 12 * 60;
@@ -45,6 +46,7 @@ export class GuildsService {
     private readonly redis: RedisService,
     private readonly discord: DiscordRestService,
     private readonly sessions: SessionService,
+    private readonly stats: StatsService,
   ) {}
 
   /** Bot invite link. With a guild id the server is preselected; without one Discord lets the user choose. */
@@ -116,7 +118,15 @@ export class GuildsService {
   async getUserGuilds(session: SessionData, sid?: string): Promise<DiscordUserGuild[]> {
     const key = `ug:${session.userId}`;
     const cached = await this.redis.client.get(key);
-    if (cached) return JSON.parse(cached) as DiscordUserGuild[];
+    if (cached) {
+      await this.stats.hit('userGuilds');
+      return JSON.parse(cached) as DiscordUserGuild[];
+    }
+    await this.stats.miss('userGuilds');
+    const blockedUntil = Number(await this.redis.client.get('discord:blocked_until'));
+    if (blockedUntil > Date.now()) {
+      throw new ServiceUnavailableException('Discord is temporarily rate limited and no cached server list is available.');
+    }
     try {
       const list = await this.discord.getCurrentUserGuilds(this.sessions.accessToken(session));
       await this.redis.client.set(key, JSON.stringify(list), 'EX', USER_GUILDS_TTL);
@@ -191,7 +201,11 @@ export class GuildsService {
   async getChannels(guildId: string): Promise<ChannelInfo[]> {
     const key = guildChannelsCacheKey(guildId);
     const cached = await this.redis.client.get(key);
-    if (cached) return JSON.parse(cached) as ChannelInfo[];
+    if (cached) {
+      await this.stats.hit('channels');
+      return JSON.parse(cached) as ChannelInfo[];
+    }
+    await this.stats.miss('channels');
     const rows = await this.database.db
       .select({
         id: guildChannels.id,

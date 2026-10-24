@@ -20,7 +20,14 @@ describe('loadConfig', () => {
     expect(c.databaseSsl).toBe(true);
     expect(c.shardCount).toBe('auto');
     expect(c.botPermissions).toBe('268487680');
+    expect(c.adminUserIds).toEqual([]);
     expect(c.sessionKey).toHaveLength(32);
+  });
+
+  it('parses configured admin Discord IDs', () => {
+    const c = loadConfig({ ...valid, ADMIN_USER_IDS: '123456789012345678, 987654321098765432' } as NodeJS.ProcessEnv);
+    expect(c.adminUserIds).toEqual(['123456789012345678', '987654321098765432']);
+    expect(() => loadConfig({ ...valid, ADMIN_USER_IDS: 'not-a-discord-id' } as NodeJS.ProcessEnv)).toThrow(/ADMIN_USER_IDS/);
   });
 
   it('fails fast with readable errors', () => {
