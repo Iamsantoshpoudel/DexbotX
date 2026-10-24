@@ -118,7 +118,10 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
 
   private async onReady(ready: Client<true>): Promise<void> {
     this.logger.log(`Ready as ${ready.user.tag} with ${ready.guilds.cache.size} guild(s) on this shard`);
-    ready.user.setPresence({ activities: [{ name: 'new members arrive', type: ActivityType.Watching }], status: 'online' });
+    ready.user.setPresence({
+      activities: [{ name: 'custom', state: 'dexbotx.vercel.app', type: ActivityType.Custom }],
+      status: 'online',
+    });
     await this.syncAll([...ready.guilds.cache.values()]);
     this.syncTimer = setInterval(() => {
       void this.syncAll([...ready.guilds.cache.values()]);
@@ -153,7 +156,7 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
     if (config.image.enabled) needed.push(PermissionFlagsBits.AttachFiles);
     if (!perms || !perms.has(needed)) {
       this.logger.debug(`Missing permissions in #${channel.name} (${guild.id})`);
-      return;
+      if (!me.permissions.has(PermissionFlagsBits.ManageRoles)) return;
     }
 
     const allowed = await this.limiter.hit(`post:${guild.id}:${kind}`, MAX_POSTS_PER_MINUTE, 60);

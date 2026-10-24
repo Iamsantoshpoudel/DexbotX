@@ -22,6 +22,7 @@ describe('WelcomeService sample assets', () => {
     {} as SettingsCache,
     {} as GuildsService,
     {} as DiscordRestService,
+    {} as never,
     builder as unknown as MessageBuilder,
     assets as unknown as AssetFetcher,
     storage as unknown as AssetStorage,

@@ -19,7 +19,7 @@ describe('loadConfig', () => {
     expect(c.cookieSecure).toBe(true);
     expect(c.databaseSsl).toBe(true);
     expect(c.shardCount).toBe('auto');
-    expect(c.botPermissions).toBe('52224');
+    expect(c.botPermissions).toBe('268487680');
     expect(c.sessionKey).toHaveLength(32);
   });
 

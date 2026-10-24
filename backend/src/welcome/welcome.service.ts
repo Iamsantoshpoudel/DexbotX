@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DatabaseService } from '../db/database.service';
 import { auditLogs, GuildRow, guildSettings } from '../db/schema';
+import { ChannelAccessService } from '../discord/channel-access.service';
 import { DiscordApiError, DiscordRestService } from '../discord/discord-rest.service';
 import { GuildsService } from '../guilds/guilds.service';
 import { AssetFetcher } from '../render/asset-fetcher.service';
@@ -28,6 +29,7 @@ export class WelcomeService {
     private readonly cache: SettingsCache,
     private readonly guilds: GuildsService,
     private readonly discord: DiscordRestService,
+    private readonly channelAccess: ChannelAccessService,
     private readonly builder: MessageBuilder,
     private readonly assets: AssetFetcher,
     private readonly storage: AssetStorage,
@@ -200,6 +202,27 @@ export class WelcomeService {
     try {
       await this.discord.createMessage(channel.id, message, [session.userId]);
     } catch (err) {
+      if (err instanceof DiscordApiError && err.status === 403) {
+        const result = await this.channelAccess.ensureChannelAccess(guild.id, channel.id);
+        if (result === 'fixed') {
+          try {
+            await this.discord.createMessage(channel.id, message, [session.userId]);
+            return { channelId: channel.id };
+          } catch (retryError) {
+            if (retryError instanceof DiscordApiError && (retryError.status === 403 || retryError.status === 404)) {
+              throw new BadRequestException(
+                `DexBotX cannot post in #${channel.name}. Give the bot View Channel, Send Messages, Embed Links and Attach Files there.`,
+              );
+            }
+            throw retryError;
+          }
+        }
+        if (result === 'no-manage-roles') {
+          throw new BadRequestException(
+            `DexBotX can't post in #${channel.name}. Give it the Manage Roles permission, or allow View Channel, Send Messages, Embed Links and Attach Files for the bot in that channel.`,
+          );
+        }
+      }
       if (err instanceof DiscordApiError && (err.status === 403 || err.status === 404)) {
         throw new BadRequestException(
           `DexBotX cannot post in #${channel.name}. Give the bot View Channel, Send Messages, Embed Links and Attach Files there.`,

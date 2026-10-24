@@ -23,8 +23,8 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake'),
   DISCORD_CLIENT_SECRET: z.string().min(10),
   DISCORD_BOT_TOKEN: z.string().min(20),
-  /** Permission integer used in the invite link. 52224 = View Channel + Send Messages + Embed Links + Attach Files. */
-  BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('52224'),
+  /** Permission integer used in the invite link. Includes Manage Roles for per-channel permission repair; never Administrator. */
+  BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('268487680'),
   /** "auto" lets Discord choose the shard count, or set a fixed number. */
   SHARD_COUNT: z.string().regex(/^(auto|\d+)$/).default('auto'),
 

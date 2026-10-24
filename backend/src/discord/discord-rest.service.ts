@@ -66,6 +66,7 @@ export interface DiscordRole {
   name: string;
   color: number;
   position: number;
+  hoist?: boolean;
 }
 
 @Injectable()
@@ -161,6 +162,41 @@ export class DiscordRestService {
 
   getGuildRoles(guildId: string): Promise<DiscordRole[]> {
     return this.request<DiscordRole[]>(`/guilds/${guildId}/roles`, { headers: this.bot() });
+  }
+
+  createRole(guildId: string, name: string, permissions: string): Promise<DiscordRole> {
+    return this.request<DiscordRole>(`/guilds/${guildId}/roles`, {
+      method: 'POST',
+      headers: { ...this.bot(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, permissions, mentionable: false, hoist: true }),
+    });
+  }
+
+  modifyRole(guildId: string, roleId: string, body: { hoist: boolean }): Promise<DiscordRole> {
+    return this.request<DiscordRole>(`/guilds/${guildId}/roles/${roleId}`, {
+      method: 'PATCH',
+      headers: { ...this.bot(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  getGuildMember(guildId: string, userId: string): Promise<{ roles: string[] }> {
+    return this.request<{ roles: string[] }>(`/guilds/${guildId}/members/${userId}`, { headers: this.bot() });
+  }
+
+  async addMemberRole(guildId: string, userId: string, roleId: string): Promise<void> {
+    await this.request<void>(`/guilds/${guildId}/members/${userId}/roles/${roleId}`, {
+      method: 'PUT',
+      headers: this.bot(),
+    });
+  }
+
+  async setChannelOverwrite(channelId: string, targetId: string, allow: string): Promise<void> {
+    await this.request<void>(`/channels/${channelId}/permissions/${targetId}`, {
+      method: 'PUT',
+      headers: { ...this.bot(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 0, allow, deny: '0' }),
+    });
   }
 
   /** Succeeds only if the bot is in the guild; Discord returns 404/403 otherwise. */

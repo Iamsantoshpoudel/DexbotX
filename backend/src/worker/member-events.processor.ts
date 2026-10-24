@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdo
 import { Job, UnrecoverableError, Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { APP_CONFIG, AppConfig } from '../core/config';
+import { ChannelAccessService } from '../discord/channel-access.service';
 import { DiscordApiError, DiscordRestService } from '../discord/discord-rest.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { MEMBER_EVENTS_QUEUE, MemberEventJob } from '../queue/member-events.queue';
@@ -32,6 +33,7 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
     private readonly assets: AssetFetcher,
     private readonly storage: AssetStorage,
     private readonly discord: DiscordRestService,
+    private readonly channelAccess: ChannelAccessService,
     private readonly metrics: MetricsService,
   ) {}
 
@@ -90,6 +92,17 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
           await this.worker?.rateLimit(wait);
           throw Worker.RateLimitError();
         }
+        if (err.status === 403 && (err.discordCode === 50013 || err.discordCode === 50001)) {
+          const result = await this.channelAccess.ensureChannelAccess(guildId, channelId);
+          if (result === 'fixed') {
+            try {
+              await this.discord.createMessage(channelId, message, kind === 'welcome' ? [user.id] : []);
+            } catch (retryError) {
+              await this.handleDiscordPostError(retryError);
+            }
+            return 'sent';
+          }
+        }
         // Missing access/permissions or deleted channel: retrying cannot help.
         if (err.status === 403 || err.status === 404) {
           throw new UnrecoverableError(`Discord refused the post (${err.status}${err.discordCode ? `/${err.discordCode}` : ''})`);
@@ -98,5 +111,19 @@ export class MemberEventsProcessor implements OnApplicationBootstrap, OnApplicat
       throw err;
     }
     return 'sent';
+  }
+
+  private async handleDiscordPostError(err: unknown): Promise<never> {
+    if (err instanceof DiscordApiError) {
+      if (err.status === 429) {
+        const wait = Math.ceil((err.retryAfter ?? 1) * 1000);
+        await this.worker?.rateLimit(wait);
+        throw Worker.RateLimitError();
+      }
+      if (err.status === 403 || err.status === 404) {
+        throw new UnrecoverableError(`Discord refused the post (${err.status}${err.discordCode ? `/${err.discordCode}` : ''})`);
+      }
+    }
+    throw err;
   }
 }

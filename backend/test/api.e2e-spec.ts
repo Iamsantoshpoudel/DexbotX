@@ -1,7 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createCanvas } from '@napi-rs/canvas';
-import { ChannelType, type GuildMember } from 'discord.js';
+import { ChannelType, PermissionFlagsBits, type GuildMember } from 'discord.js';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { eq, sql } from 'drizzle-orm';
@@ -48,6 +48,10 @@ const storageCalls: Array<{ method: string; path: string; body?: RequestInit['bo
 const realFetch = global.fetch;
 const discordCalls: Array<{ method: string; path: string; init: RequestInit }> = [];
 let failMessagePost = false;
+let failRoleLookup = false;
+let messagePostFailures = 0;
+let stubGuildRoles: Array<{ id: string; name: string; color: number; position: number; hoist?: boolean }> = [];
+let stubBotRoleIds: string[] = [];
 
 type GuildSummary = { id: string; inviteUrl: string | null; botInstalled: boolean };
 type ChannelSummary = { name: string };
@@ -90,8 +94,34 @@ function installFetchStub(png: Buffer) {
           { id: '555555555555555553', type: 5, name: 'news', position: 3, parent_id: null },
         ]);
       }
+      if (path === `/guilds/${G1}/roles` && method === 'GET') {
+        if (failRoleLookup) return json({ code: 50013, message: 'Missing Permissions' }, 403);
+        return json(stubGuildRoles);
+      }
+      if (path === `/guilds/${G1}/roles` && method === 'POST') {
+        const body = JSON.parse(String(init.body));
+        const role = { id: '444444444444444444', name: body.name, color: 0, position: 1, hoist: body.hoist };
+        stubGuildRoles.push(role);
+        return json(role);
+      }
+      if (path === `/guilds/${G1}/roles/444444444444444444` && method === 'PATCH') {
+        const role = stubGuildRoles.find((candidate) => candidate.id === '444444444444444444');
+        if (role) role.hoist = JSON.parse(String(init.body)).hoist;
+        return json(role ?? {});
+      }
+      if (path === `/guilds/${G1}/members/123456789012345678` && method === 'GET') return json({ roles: stubBotRoleIds });
+      if (path === `/guilds/${G1}/members/123456789012345678/roles/444444444444444444` && method === 'PUT') {
+        if (!stubBotRoleIds.includes('444444444444444444')) stubBotRoleIds.push('444444444444444444');
+        return new Response(null, { status: 204 });
+      }
+      if (path === `/channels/${C1}/permissions/444444444444444444` && method === 'PUT') {
+        return new Response(null, { status: 204 });
+      }
       if (path === `/channels/${C1}/messages`) {
-        if (failMessagePost) return json({ code: 50013, message: 'Missing Permissions' }, 403);
+        if (failMessagePost || messagePostFailures > 0) {
+          if (messagePostFailures > 0) messagePostFailures--;
+          return json({ code: 50013, message: 'Missing Permissions' }, 403);
+        }
         return json({ id: '1' });
       }
       return json({ message: 'not stubbed' }, 404);
@@ -296,7 +326,7 @@ describe('DexBotX API', () => {
     expect(url.origin + url.pathname).toBe('https://discord.com/oauth2/authorize');
     expect(url.searchParams.get('client_id')).toBe('123456789012345678');
     expect(url.searchParams.get('scope')).toBe('bot');
-    expect(url.searchParams.get('permissions')).toBe('52224'); // never Administrator (8)
+    expect(url.searchParams.get('permissions')).toBe('268487680'); // includes Manage Roles, never Administrator (8)
     expect(url.searchParams.has('guild_id')).toBe(false);
   });
 
@@ -360,7 +390,7 @@ describe('DexBotX API', () => {
     const inviteUrl = byId[G3].inviteUrl;
     if (!inviteUrl) throw new Error('Expected a bot invite URL for a server without the bot');
     const invite = new URL(inviteUrl);
-    expect(invite.searchParams.get('permissions')).toBe('52224');
+    expect(invite.searchParams.get('permissions')).toBe('268487680');
     expect(invite.searchParams.get('guild_id')).toBe(G3);
     expect(res.body.guilds[0].id).toBe(G1); // installed first
   });
@@ -511,6 +541,91 @@ describe('DexBotX API', () => {
     failMessagePost = false;
   });
 
+  it('repairs channel access after a denied test post and retries once', async () => {
+    const redis = app.get(RedisService).client;
+    await redis.del(`permfix:${G1}:${C1}`);
+    stubGuildRoles = [];
+    stubBotRoleIds = [];
+    failMessagePost = false;
+    messagePostFailures = 1;
+    discordCalls.length = 0;
+
+    await http().post(`/guilds/${G1}/messages/welcome/test`).set(authed()).expect(200);
+
+    const roleCreate = discordCalls.find((call) => call.method === 'POST' && call.path === `/guilds/${G1}/roles`);
+    expect(roleCreate).toBeTruthy();
+    expect(JSON.parse(String(roleCreate!.init.body))).toEqual({
+      name: 'DexBotX',
+      permissions: (
+        PermissionFlagsBits.ViewChannel |
+        PermissionFlagsBits.SendMessages |
+        PermissionFlagsBits.EmbedLinks |
+        PermissionFlagsBits.AttachFiles |
+        PermissionFlagsBits.ReadMessageHistory
+      ).toString(),
+      mentionable: false,
+      hoist: true,
+    });
+    expect(discordCalls.some((call) => call.method === 'PUT' && call.path === `/guilds/${G1}/members/123456789012345678/roles/444444444444444444`)).toBe(true);
+    const overwrite = discordCalls.find((call) => call.method === 'PUT' && call.path === `/channels/${C1}/permissions/444444444444444444`);
+    expect(JSON.parse(String(overwrite?.init.body))).toEqual({
+      type: 0,
+      allow: (
+        PermissionFlagsBits.ViewChannel |
+        PermissionFlagsBits.SendMessages |
+        PermissionFlagsBits.EmbedLinks |
+        PermissionFlagsBits.AttachFiles |
+        PermissionFlagsBits.ReadMessageHistory
+      ).toString(),
+      deny: '0',
+    });
+    expect(discordCalls.filter((call) => call.method === 'POST' && call.path === `/channels/${C1}/messages`)).toHaveLength(2);
+    await redis.del(`permfix:${G1}:${C1}`);
+  });
+
+  it('does not repeat Discord permission repair calls during the cooldown', async () => {
+    const redis = app.get(RedisService).client;
+    await redis.del(`permfix:${G1}:${C1}`);
+    stubGuildRoles = [];
+    stubBotRoleIds = [];
+    failMessagePost = true;
+    discordCalls.length = 0;
+
+    await http().post(`/guilds/${G1}/messages/welcome/test`).set(authed()).expect(400);
+    const repairCalls = () => discordCalls.filter((call) =>
+      call.path === `/guilds/${G1}/roles` ||
+      call.path === `/guilds/${G1}/members/123456789012345678` ||
+      call.path === `/guilds/${G1}/members/123456789012345678/roles/444444444444444444` ||
+      call.path === `/channels/${C1}/permissions/444444444444444444`,
+    ).length;
+    const firstRepairCallCount = repairCalls();
+    expect(firstRepairCallCount).toBeGreaterThan(0);
+
+    const callsBeforeSecondFailure = discordCalls.length;
+    await http().post(`/guilds/${G1}/messages/welcome/test`).set(authed()).expect(400);
+    expect(repairCalls()).toBe(firstRepairCallCount);
+    expect(discordCalls.slice(callsBeforeSecondFailure).filter((call) => call.path === `/channels/${C1}/messages`)).toHaveLength(1);
+
+    failMessagePost = false;
+    await redis.del(`permfix:${G1}:${C1}`);
+  });
+
+  it('explains that Manage Roles is needed when Discord refuses permission repair', async () => {
+    const redis = app.get(RedisService).client;
+    await redis.del(`permfix:${G1}:${C1}`);
+    failMessagePost = true;
+    failRoleLookup = true;
+
+    const res = await http().post(`/guilds/${G1}/messages/welcome/test`).set(authed()).expect(400);
+    expect(res.body.message).toBe(
+      "DexBotX can't post in #welcome. Give it the Manage Roles permission, or allow View Channel, Send Messages, Embed Links and Attach Files for the bot in that channel.",
+    );
+
+    failMessagePost = false;
+    failRoleLookup = false;
+    await redis.del(`permfix:${G1}:${C1}`);
+  });
+
   const bigPng = async (w = 1200, h = 500) => {
     const c = createCanvas(w, h);
     const x = c.getContext('2d');
@@ -616,7 +731,7 @@ describe('DexBotX API', () => {
 });
 
 describe('Bot → queue → worker', () => {
-  function fakeMember(opts: { hasPerms?: boolean; bot?: boolean; channelInCache?: boolean; userId?: string } = {}) {
+  function fakeMember(opts: { hasPerms?: boolean; hasManageRoles?: boolean; bot?: boolean; channelInCache?: boolean; userId?: string } = {}) {
     const channel = {
       id: C1,
       name: 'welcome',
@@ -628,7 +743,16 @@ describe('Bot → queue → worker', () => {
       name: 'Alpha Guild',
       memberCount: 121,
       channels: { cache: new Map(opts.channelInCache === false ? [] : [[C1, channel]]) },
-      members: { me: { id: 'bot' }, fetchMe: async () => ({ id: 'bot' }) },
+      members: {
+        me: {
+          id: 'bot',
+          permissions: { has: (permission: bigint) => permission === PermissionFlagsBits.ManageRoles && opts.hasManageRoles === true },
+        },
+        fetchMe: async () => ({
+          id: 'bot',
+          permissions: { has: (permission: bigint) => permission === PermissionFlagsBits.ManageRoles && opts.hasManageRoles === true },
+        }),
+      },
       bannerURL: () => null,
     };
     return {
@@ -668,6 +792,14 @@ describe('Bot → queue → worker', () => {
     expect(await totalJobs()).toBe(0);
   });
 
+  it('queues an event with missing channel permissions when the bot can manage roles', async () => {
+    await handle('welcome', fakeMember({ hasPerms: false, hasManageRoles: true, userId: '888111888111888111' }));
+    const jobs = await queue().getJobs(['waiting']);
+    const job = jobs.find((queued) => queued.data.user.id === '888111888111888111');
+    expect(job).toBeTruthy();
+    await job?.remove();
+  });
+
   it('hands a compact job to the queue instead of rendering in the shard', async () => {
     await handle('welcome', fakeMember());
     await handle('welcome', fakeMember()); // duplicate gateway delivery is deduplicated
@@ -698,6 +830,33 @@ describe('Bot → queue → worker', () => {
     expect(done.returnvalue).toBe('sent');
   });
 
+  it('worker repairs denied channel access and retries the post once', async () => {
+    const redis = botModule.get(RedisService).client;
+    await redis.del(`permfix:${G1}:${C1}`);
+    stubGuildRoles = [];
+    stubBotRoleIds = [];
+    failMessagePost = false;
+    messagePostFailures = 1;
+    discordCalls.length = 0;
+    await botModule.get(MemberEventsQueue).enqueue({
+      kind: 'welcome',
+      guildId: G1,
+      channelId: C1,
+      user: { id: '888222888222888222', username: 'newbie', displayName: 'Newbie', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/1.png' },
+      guild: { name: 'Alpha Guild', memberCount: 121, bannerUrl: null },
+    });
+
+    const job = await waitFor(async () => {
+      const completed = await queue().getJobs(['completed']);
+      return completed.find((queued) => queued.data.user.id === '888222888222888222');
+    });
+    expect(job.returnvalue).toBe('sent');
+    expect(discordCalls.filter((call) => call.method === 'POST' && call.path === `/channels/${C1}/messages`)).toHaveLength(2);
+    expect(discordCalls.some((call) => call.method === 'POST' && call.path === `/guilds/${G1}/roles`)).toBe(true);
+    expect(discordCalls.some((call) => call.method === 'PUT' && call.path === `/channels/${C1}/permissions/444444444444444444`)).toBe(true);
+    await redis.del(`permfix:${G1}:${C1}`);
+  });
+
   it('worker re-checks the latest settings, so a disabled feature is skipped', async () => {
     const q = botModule.get(MemberEventsQueue);
     await q.enqueue({
@@ -715,6 +874,7 @@ describe('Bot → queue → worker', () => {
   });
 
   it('does not retry when Discord refuses the post (missing permissions)', async () => {
+    await botModule.get(RedisService).client.del(`permfix:${G1}:${C1}`);
     failMessagePost = true;
     await handle('welcome', fakeMember({ userId: '888000888000888000' }));
     const job = await waitFor(async () => (await queue().getJobs(['failed'])).find((j) => j.data.user.id === '888000888000888000'));
