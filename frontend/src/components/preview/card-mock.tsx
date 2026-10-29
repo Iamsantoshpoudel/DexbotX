@@ -2,7 +2,7 @@ import { gradientFor } from '@/lib/image-styles';
 import type { ImageStyleId } from '@/lib/types';
 
 /** A CSS drawing of the welcome card, used on the landing page. The dashboard shows the real server-rendered PNG. */
-export function CardMock({ style = 'midnight', title = 'Welcome', name = 'Nova', subtitle = 'You are member #1,204', accent = 'var(--color-primary)', members = '1,204 members' }: { style?: ImageStyleId; title?: string; name?: string; subtitle?: string; accent?: string; members?: string }) {
+export function CardMock({ style = 'midnight', title = 'Welcome', name = 'New member', subtitle = 'A new member has joined', accent = 'var(--color-primary)', members = 'Welcome message' }: { style?: ImageStyleId; title?: string; name?: string; subtitle?: string; accent?: string; members?: string }) {
   return (
     <div className="relative w-full overflow-hidden rounded-[2.5cqw] border border-white/10 shadow-2xl" style={{ aspectRatio: '1100 / 400', containerType: 'inline-size', background: gradientFor(style) }}>
       <div className="absolute -left-[8cqw] top-[2cqw] size-[40cqw] rounded-full opacity-35 blur-3xl" style={{ background: accent }} />

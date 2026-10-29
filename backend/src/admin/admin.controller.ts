@@ -7,6 +7,7 @@ import { AdminOverviewService } from './admin-overview.service';
 import { AdminGuard } from './admin.guard';
 import { AdminUsersContentService } from './admin-users-content.service';
 import { FeatureFlagsService } from '../core/feature-flags.service';
+import { AdminMessagesService } from './admin-messages.service';
 
 @Public()
 @Controller('admin')
@@ -19,6 +20,7 @@ export class AdminController {
     private readonly audit: AdminAuditService,
     private readonly usersContent: AdminUsersContentService,
     private readonly flags: FeatureFlagsService,
+    private readonly messages: AdminMessagesService,
   ) {}
 
   @Get('me')
@@ -44,6 +46,17 @@ export class AdminController {
   @Get('guilds/:id')
   guild(@Param('id') id: string) {
     return this.operations.guildDetail(id);
+  }
+
+  @Get('guilds/:id/channels-for-message')
+  channelsForMessage(@Param('id') id: string) {
+    return this.messages.channelsForMessage(id);
+  }
+
+  @Post('guilds/:id/message')
+  @RateLimit('admin-message', 10)
+  sendGuildMessage(@Param('id') id: string, @Body() body: unknown, @Req() req: AuthedRequest) {
+    return this.messages.sendMessage(req.session!.userId, id, body);
   }
 
   @Post('guilds/:id/resync')

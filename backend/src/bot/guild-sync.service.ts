@@ -21,6 +21,7 @@ import { StatsService } from '../admin/stats.service';
 const CHANNELS_TTL_SECONDS = 60 * 60;
 const ROLES_TTL_SECONDS = 12 * 60;
 const META_TTL_SECONDS = 15 * 60;
+const SYSTEM_CHANNEL_TTL_SECONDS = 15 * 60;
 const REFRESH_COOLDOWN_SECONDS = 30;
 
 export interface CachedChannel {
@@ -93,11 +94,33 @@ export class GuildSyncService {
     this.logger.log(`Synced ${list.length} guild(s)`);
   }
 
-  async upsert(g: Guild): Promise<void> {
-    await this.upsertMany([g]);
+  async upsert(g: Guild): Promise<boolean> {
+    const row = this.toGuildRow(g);
+    const inserted = await this.database.db
+      .insert(guilds)
+      .values(row)
+      .onConflictDoNothing()
+      .returning({ id: guilds.id });
+    if (inserted.length === 0) {
+      await this.database.db
+        .update(guilds)
+        .set({
+          name: row.name,
+          iconHash: row.iconHash,
+          bannerHash: row.bannerHash,
+          ownerId: row.ownerId,
+          memberCount: row.memberCount,
+          installed: true,
+          leftAt: null,
+          updatedAt: row.updatedAt,
+        })
+        .where(eq(guilds.id, g.id));
+    }
+    await this.redis.client.del(guildMetaCacheKey(g.id));
     await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, g.id);
     await this.publishGuildEvent(g.id, 'installed', 'joined', {});
     await this.stats.incr('guild_joins');
+    return inserted.length > 0;
   }
 
   async notifyReconciled(): Promise<void> {
@@ -111,7 +134,7 @@ export class GuildSyncService {
       .where(and(eq(guilds.id, guildId), eq(guilds.installed, true)))
       .returning({ id: guilds.id });
     if (updated.length > 0) {
-      await this.redis.client.del(guildMetaCacheKey(guildId));
+      await this.redis.client.del(guildMetaCacheKey(guildId), `discord:cache:system-channel:${guildId}`);
       await this.redis.client.publish(GUILD_MEMBERSHIP_EVENTS_CHANNEL, guildId);
       await this.publishGuildEvent(guildId, 'installed', 'left', {});
       await this.stats.incr('guild_leaves');
@@ -240,6 +263,12 @@ export class GuildSyncService {
     const settings = await this.settings.get(guildId);
     await Promise.all([
       this.redis.client.set(guildMetaCacheKey(guildId), JSON.stringify(persistedGuild[0]), 'EX', META_TTL_SECONDS),
+      this.redis.client.set(
+        `discord:cache:system-channel:${guildId}`,
+        JSON.stringify(guild.system_channel_id ?? null),
+        'EX',
+        SYSTEM_CHANNEL_TTL_SECONDS,
+      ),
       this.redis.client.set(guildChannelsCacheKey(guildId), JSON.stringify(channels), 'EX', CHANNELS_TTL_SECONDS),
       this.redis.client.set(guildRolesCacheKey(guildId), JSON.stringify(roles), 'EX', ROLES_TTL_SECONDS),
       this.redis.client.set(guildSettingsCacheKey(guildId), JSON.stringify(settings), 'EX', 60 * 60),
@@ -302,7 +331,15 @@ export class GuildSyncService {
 
   async guildUpdated(g: Guild): Promise<void> {
     await this.upsert(g);
-    await this.redis.client.del(guildMetaCacheKey(g.id));
+    await Promise.all([
+      this.redis.client.del(guildMetaCacheKey(g.id)),
+      this.redis.client.set(
+        `discord:cache:system-channel:${g.id}`,
+        JSON.stringify(g.systemChannelId),
+        'EX',
+        SYSTEM_CHANNEL_TTL_SECONDS,
+      ),
+    ]);
   }
 
   private async invalidateChannels(guildId: string, channelId?: string): Promise<void> {

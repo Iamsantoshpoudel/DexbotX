@@ -92,4 +92,19 @@ export const adminAudit = pgTable(
   (t) => [index('admin_audit_created_idx').on(t.createdAt)],
 ).enableRLS();
 
+export const modActions = pgTable(
+  'mod_actions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    guildId: text('guild_id').notNull(),
+    moderatorId: text('moderator_id').notNull(),
+    targetId: text('target_id').notNull(),
+    action: text('action').notNull(),
+    reason: text('reason').notNull(),
+    durationSeconds: integer('duration_seconds'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('mod_actions_guild_created_idx').on(t.guildId, t.createdAt)],
+).enableRLS();
+
 export type GuildRow = typeof guilds.$inferSelect;

@@ -9,6 +9,7 @@ import type {
   AdminContent,
   AdminFlags,
   AdminUsers,
+  AdminMessageChannels,
 } from '@/lib/admin-types';
 
 export const adminApi = createApi({
@@ -37,6 +38,11 @@ export const adminApi = createApi({
     }),
     getGuild: build.query<AdminGuildDetail, string>({
       query: (id) => `/admin/guilds/${encodeURIComponent(id)}`,
+      providesTags: (_result, _error, id) => [{ type: 'AdminGuild', id }],
+    }),
+    getAdminMessageChannels: build.query<AdminMessageChannels, string>({
+      query: (id) => `/admin/guilds/${encodeURIComponent(id)}/channels-for-message`,
+      keepUnusedDataFor: 60,
       providesTags: (_result, _error, id) => [{ type: 'AdminGuild', id }],
     }),
     resyncGuild: build.mutation<{ ok: true }, string>({
@@ -100,6 +106,7 @@ export const {
   useGetRateLimitsQuery,
   useGetGuildsQuery,
   useGetGuildQuery,
+  useGetAdminMessageChannelsQuery,
   useResyncGuildMutation,
   useDisableGuildMutation,
   useLeaveGuildMutation,

@@ -82,9 +82,11 @@ describe('permissions', () => {
 });
 
 describe('auth helpers', () => {
-  it('only allows dashboard paths as post-login redirect', () => {
+  it('only allows dashboard and admin paths as post-login redirect', () => {
     expect(safeReturnTo('/dashboard/123')).toBe('/dashboard/123');
-    for (const bad of ['https://evil.com', '//evil.com', '/\\evil.com', '/other', undefined, 5]) {
+    expect(safeReturnTo('/admin')).toBe('/admin');
+    expect(safeReturnTo('/admin/servers/123')).toBe('/admin/servers/123');
+    for (const bad of ['https://evil.com', '//evil.com', '/\\evil.com', '/other', '/admin?next=https://evil.com', undefined, 5]) {
       expect(safeReturnTo(bad)).toBe('/dashboard');
     }
   });

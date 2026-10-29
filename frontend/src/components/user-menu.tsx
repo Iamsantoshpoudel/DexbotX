@@ -4,12 +4,18 @@ import { LayoutDashboard, LogOut } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { adminApi } from '@/store/adminApi';
+import { api } from '@/store/api';
+import { setLoggedOutHintCookie } from '@/lib/utils';
+import { useAppDispatch } from '@/store/hooks';
 import { useLogoutMutation } from '@/store/api';
 import type { Me } from '@/lib/types';
 
 export function UserMenu({ me }: { me: Me }) {
   const [open, setOpen] = useState(false);
   const [logout, { isLoading }] = useLogoutMutation();
+  const dispatch = useAppDispatch();
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -25,9 +31,20 @@ export function UserMenu({ me }: { me: Me }) {
   }, [open]);
 
   async function onLogout() {
-    await logout().unwrap().catch(() => undefined);
+    try {
+      await logout().unwrap();
+    } catch (error) {
+      const status = typeof error === 'object' && error !== null && 'status' in error ? error.status : undefined;
+      if (status !== 401 && status !== 403) {
+        toast.error('Could not log out. Please try again.');
+        return;
+      }
+    }
+    setLoggedOutHintCookie();
+    dispatch(api.util.resetApiState());
+    dispatch(adminApi.util.resetApiState());
     // Hard navigation drops every cached query so the next visitor on this browser sees nothing.
-    window.location.assign(new URL('/', window.location.origin));
+    window.location.assign('/');
   }
 
   const name = me.globalName ?? me.username;

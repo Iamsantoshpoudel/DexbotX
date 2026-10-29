@@ -16,6 +16,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       status = exception.getStatus();
       const r = exception.getResponse();
       body = typeof r === 'string' ? { statusCode: status, message: r } : { statusCode: status, ...(r as object) };
+      if (typeof body.retryAfter === 'number') res.setHeader('Retry-After', String(Math.ceil(body.retryAfter)));
     } else if (exception instanceof DiscordApiError) {
       if (exception.status === 429) {
         status = HttpStatus.TOO_MANY_REQUESTS;

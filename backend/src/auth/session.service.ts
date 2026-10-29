@@ -21,6 +21,10 @@ export class SessionService {
     return `sess:${sha256Hex(sid)}`;
   }
 
+  private userIndexKey(userId: string): string {
+    return `usess:${userId}`;
+  }
+
   async create(user: DiscordUser, token: DiscordTokenResponse): Promise<{ sid: string; ttlSeconds: number }> {
     const ttlSeconds = Math.max(60, Math.min(this.config.sessionTtlSeconds, token.expires_in - 60));
     const now = Date.now();
@@ -34,7 +38,10 @@ export class SessionService {
       expiresAt: now + ttlSeconds * 1000,
     };
     const sid = randomToken(32);
-    await this.redis.client.set(this.key(sid), JSON.stringify(data), 'EX', ttlSeconds);
+    const sidHash = sha256Hex(sid);
+    await this.redis.client.set(`sess:${sidHash}`, JSON.stringify(data), 'EX', ttlSeconds);
+    await this.redis.client.sadd(this.userIndexKey(user.id), sidHash);
+    await this.redis.client.expire(this.userIndexKey(user.id), ttlSeconds);
     return { sid, ttlSeconds };
   }
 
@@ -50,7 +57,22 @@ export class SessionService {
   }
 
   async destroy(sid: string): Promise<void> {
+    const session = await this.get(sid);
     await this.redis.client.del(this.key(sid));
+    if (session) await this.redis.client.srem(this.userIndexKey(session.userId), sha256Hex(sid));
+  }
+
+  async destroyAllForUser(userId: string): Promise<number> {
+    const script = [
+      "local hashes = redis.call('SMEMBERS', KEYS[1])",
+      'local deleted = 0',
+      'for _, hash in ipairs(hashes) do',
+      "  deleted = deleted + redis.call('DEL', 'sess:' .. hash)",
+      'end',
+      "redis.call('DEL', KEYS[1])",
+      'return deleted',
+    ].join('\n');
+    return Number(await this.redis.client.eval(script, 1, this.userIndexKey(userId)));
   }
 
   async findActiveForUser(userId: string): Promise<SessionData | null> {

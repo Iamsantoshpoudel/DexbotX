@@ -25,12 +25,13 @@ const envSchema = z.object({
   DISCORD_CLIENT_ID: z.string().regex(/^\d{17,20}$/, 'must be a Discord snowflake'),
   DISCORD_CLIENT_SECRET: z.string().min(10),
   DISCORD_BOT_TOKEN: z.string().min(20),
+  DISCORD_SUPPORT_URL: z.string().url().optional().or(z.literal('')),
   ADMIN_USER_IDS: z.preprocess(
     (value) => typeof value === 'string' ? value.split(',').map((id) => id.trim()).filter(Boolean) : value,
     z.array(z.string().regex(/^\d{17,20}$/)),
   ).default([]),
-  /** Permission integer used in the invite link. Includes Manage Roles for per-channel permission repair; never Administrator. */
-  BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('268487680'),
+  /** Invite permissions include moderation commands and per-channel permission repair; never Administrator. */
+  BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('1099780443270'),
   /** Number of Discord shards to launch. */
   SHARD_COUNT: z.coerce.number().int().min(1).default(1),
 
@@ -87,6 +88,7 @@ export interface AppConfig {
   discordClientId: string;
   discordClientSecret: string;
   discordBotToken: string;
+  discordSupportUrl?: string;
   adminUserIds: string[];
   botPermissions: string;
   shardCount: number;
@@ -136,6 +138,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     discordClientId: e.DISCORD_CLIENT_ID,
     discordClientSecret: e.DISCORD_CLIENT_SECRET,
     discordBotToken: e.DISCORD_BOT_TOKEN,
+    discordSupportUrl: e.DISCORD_SUPPORT_URL || undefined,
     adminUserIds: e.ADMIN_USER_IDS,
     botPermissions: e.BOT_PERMISSIONS,
     shardCount: e.SHARD_COUNT,

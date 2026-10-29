@@ -26,6 +26,13 @@ export class MetricsService {
     registers: [this.registry],
   });
 
+  readonly moderationActions = new Counter({
+    name: 'dexbotx_moderation_actions_total',
+    help: 'Moderation actions and failures by action and result',
+    labelNames: ['action', 'result'] as const,
+    registers: [this.registry],
+  });
+
   readonly discordRestCalls: Gauge;
 
   constructor(

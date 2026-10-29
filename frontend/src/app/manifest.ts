@@ -6,12 +6,14 @@ export default function manifest(): MetadataRoute.Manifest {
     name: SITE.brandName,
     short_name: SITE.brandName,
     description: SITE.description,
+    id: '/',
     start_url: '/',
+    scope: '/',
     display: 'standalone',
     background_color: '#171717',
     theme_color: '#8ab4f8',
     icons: [
-      { src: '/icon.png', sizes: '867x879', type: 'image/png' },
+      { src: '/icon.png', sizes: '867x879', type: 'image/png', purpose: 'any' },
       { src: '/maskable-icon', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };

@@ -7,6 +7,7 @@ import {
 } from '@reduxjs/toolkit/query/react';
 import { toast } from 'sonner';
 import { parseRetryAfter, rateLimitMessage } from '@/lib/rate-limit';
+import { setLoggedOutHintCookie } from '@/lib/utils';
 import type {
   Channel,
   GuildDetail,
@@ -27,8 +28,17 @@ const rawBaseQuery = fetchBaseQuery({
   credentials: 'same-origin',
 });
 
-const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extra) => {
-  const result = await rawBaseQuery(args, api, extra);
+const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, baseQueryApi, extra) => {
+  const result = await rawBaseQuery(args, baseQueryApi, extra);
+  const requestUrl = typeof args === 'string' ? args : args.url;
+  if (
+    result.error?.status === 401 &&
+    !requestUrl.startsWith('/auth/') &&
+    typeof window !== 'undefined'
+  ) {
+    setLoggedOutHintCookie();
+    baseQueryApi.dispatch(api.util.invalidateTags(['Auth']));
+  }
   // Rate limited: tell the user how long to wait. A fixed toast id collapses repeats into one message. No auto-retry.
   if (result.error?.status === 429 && typeof window !== 'undefined') {
     toast.error(rateLimitMessage(parseRetryAfter(result.meta?.response?.headers.get('retry-after'))), { id: 'rate-limit' });
@@ -39,13 +49,19 @@ const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> =
 export const api = createApi({
   reducerPath: 'api',
   baseQuery,
-  tagTypes: ['Guilds', 'Guild', 'Channels', 'Roles'],
+  tagTypes: ['Auth', 'Guilds', 'Guild', 'Channels', 'Roles'],
   refetchOnFocus: false,
   refetchOnReconnect: false,
   refetchOnMountOrArgChange: false,
   endpoints: (b) => ({
-    getMe: b.query<Me, void>({ query: () => '/auth/me', keepUnusedDataFor: 300 }),
-    logout: b.mutation<void, void>({ query: () => ({ url: '/auth/logout', method: 'POST' }) }),
+    getMe: b.query<Me, void>({
+      query: () => '/auth/me',
+      keepUnusedDataFor: 0,
+      providesTags: ['Auth'],
+    }),
+    logout: b.mutation<void, void>({
+      query: () => ({ url: '/auth/logout', method: 'POST', credentials: 'include' }),
+    }),
 
     getGuilds: b.query<GuildSummary[], void>({
       query: () => '/guilds',

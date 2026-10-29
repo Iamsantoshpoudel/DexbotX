@@ -1,7 +1,13 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, TestingModule } from '@nestjs/testing';
 import { createCanvas } from '@napi-rs/canvas';
-import { ChannelType, PermissionFlagsBits, type GuildMember } from 'discord.js';
+import {
+  ChannelType,
+  PermissionFlagsBits,
+  type ChatInputCommandInteraction,
+  type Guild,
+  type GuildMember,
+} from 'discord.js';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { eq, sql } from 'drizzle-orm';
@@ -16,7 +22,7 @@ import { configureApp } from '../src/app.setup';
 import { BotModule } from '../src/bot/bot.module';
 import { BotService } from '../src/bot/bot.service';
 import { DatabaseService } from '../src/db/database.service';
-import { adminAudit, auditLogs, guildChannels, guildRoles, guildSettings, guilds } from '../src/db/schema';
+import { adminAudit, auditLogs, guildChannels, guildRoles, guildSettings, guilds, modActions } from '../src/db/schema';
 import { SettingsCache } from '../src/redis/settings-cache.service';
 import { RedisService } from '../src/redis/redis.service';
 import { MemberEventsQueue } from '../src/queue/member-events.queue';
@@ -28,6 +34,11 @@ import { DiscordRestService } from '../src/discord/discord-rest.service';
 import { MetricsService } from '../src/metrics/metrics.service';
 import { GuildsService } from '../src/guilds/guilds.service';
 import { messageConfigSchema } from '../src/shared/message-config';
+import { sha256Hex } from '../src/shared/crypto';
+import { GuildSyncService } from '../src/bot/guild-sync.service';
+import { findOnboardingChannel } from '../src/bot/bot.service';
+import { OnboardingService } from '../src/discord/onboarding.service';
+import { ModerationService } from '../src/bot/moderation.service';
 
 const PG_PORT = 54329;
 const REDIS_PORT = 63799;
@@ -52,9 +63,14 @@ const storageObjects = new Map<string, Buffer>();
 const storageCalls: Array<{ method: string; path: string; body?: RequestInit['body'] }> = [];
 const realFetch = global.fetch;
 const discordCalls: Array<{ method: string; path: string; init: RequestInit }> = [];
+const onboardingMessages: Array<{ channelId: string; body: Record<string, unknown> }> = [];
+const dmRecipients: string[] = [];
+const onboardingEveryone = { id: 'everyone' };
 let failMessagePost = false;
+let failOnboardingDm = false;
 let failRoleLookup = false;
 let messagePostFailures = 0;
+let failAdminMessageStatus: number | null = null;
 let rateLimitGuildChannels = false;
 let stubGuildRoles: Array<{ id: string; name: string; color: number; position: number; hoist?: boolean }> = [];
 let stubBotRoleIds: string[] = [];
@@ -82,6 +98,12 @@ function installFetchStub(png: Buffer) {
     if (url.startsWith(base)) {
       const path = url.slice(base.length);
       discordCalls.push({ method, path, init });
+      if (path === '/users/@me/channels' && method === 'POST') {
+        const { recipient_id: recipientId } = JSON.parse(String(init.body)) as { recipient_id: string };
+        if (failOnboardingDm) return json({ code: 50007, message: 'Cannot send messages to this user' }, 403);
+        dmRecipients.push(recipientId);
+        return json({ id: `dm-${recipientId}` });
+      }
       if (path === '/oauth2/token') return json({ access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' });
       if (path === '/oauth2/token/revoke') return json({});
       if (path === '/users/@me') return json({ id: USER_ID, username: 'tester', global_name: 'Test Er', avatar: null });
@@ -135,10 +157,21 @@ function installFetchStub(png: Buffer) {
       if (path === `/users/@me/guilds/${G1}` && method === 'DELETE') {
         return new Response(null, { status: 204 });
       }
-      if (path === `/channels/${C1}/messages`) {
+      if (/^\/channels\/[^/]+\/messages$/.test(path)) {
+        if (failAdminMessageStatus !== null) {
+          const status = failAdminMessageStatus;
+          failAdminMessageStatus = null;
+          return json({ code: 50013, message: 'Missing Permissions' }, status);
+        }
         if (failMessagePost || messagePostFailures > 0) {
           if (messagePostFailures > 0) messagePostFailures--;
           return json({ code: 50013, message: 'Missing Permissions' }, 403);
+        }
+        if (typeof init.body === 'string') {
+          onboardingMessages.push({
+            channelId: path.split('/')[2],
+            body: JSON.parse(init.body) as Record<string, unknown>,
+          });
         }
         return json({ id: '1' });
       }
@@ -186,6 +219,41 @@ function cookieFrom(res: request.Response, name: string): string | undefined {
   const raw = ([] as string[]).concat((res.headers['set-cookie'] as unknown as string[]) ?? []);
   const found = raw.find((c) => c.startsWith(`${name}=`));
   return found?.split(';')[0];
+}
+
+function onboardingChannel(id: string, name: string, position: number, everyoneCanView = true) {
+  return {
+    id,
+    name,
+    position,
+    type: ChannelType.GuildText,
+    permissionsFor: (target: unknown) => ({
+      has: (permission: bigint | bigint[]) => target === onboardingEveryone
+        ? everyoneCanView && permission === PermissionFlagsBits.ViewChannel
+        : true,
+    }),
+    everyone: onboardingEveryone,
+  };
+}
+
+function onboardingGuild(
+  id: string,
+  channels: ReturnType<typeof onboardingChannel>[],
+  systemChannel?: ReturnType<typeof onboardingChannel>,
+  joinedTimestamp = Date.now(),
+) {
+  const me = { id: 'bot' };
+  return {
+    id,
+    name: `Guild ${id}`,
+    ownerId: 'owner-123456789012345678',
+    joinedTimestamp,
+    systemChannel: systemChannel as never ?? null,
+    roles: { everyone: onboardingEveryone },
+    channels: { cache: new Map(channels.map((channel) => [channel.id, channel])) },
+    members: { me, fetchMe: async () => me },
+    fetchAuditLogs: async () => ({ entries: [] }),
+  } as unknown as Guild;
 }
 
 /** Postgres refuses to run as root (CI containers, sandboxes), so drop to an unprivileged user when needed. */
@@ -372,7 +440,7 @@ describe('DexBotX API', () => {
     expect(url.origin + url.pathname).toBe('https://discord.com/oauth2/authorize');
     expect(url.searchParams.get('client_id')).toBe('123456789012345678');
     expect(url.searchParams.get('scope')).toBe('bot');
-    expect(url.searchParams.get('permissions')).toBe('268487680'); // includes Manage Roles, never Administrator (8)
+    expect(url.searchParams.get('permissions')).toBe('1099780443270'); // moderation permissions, never Administrator (8)
     expect(url.searchParams.has('guild_id')).toBe(false);
   });
 
@@ -415,6 +483,23 @@ describe('DexBotX API', () => {
     // state is single-use
     const replay = await http().get(`/auth/callback?code=abc&state=${state}`).set('Cookie', stateCookie).expect(302);
     expect(replay.headers.location).toContain('error=login_failed');
+  });
+
+  it('stores the logged-in user as the bot-added inviter', async () => {
+    const userSession = await app.get(SessionService).create(
+      { id: USER_ID, username: 'tester', global_name: null, avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const register = jest.spyOn(app.get(GuildsService), 'registerIfBotPresent').mockResolvedValue({ id: G1 } as never);
+    try {
+      await http().get(`/bot/added?guild_id=${G1}`).set({ Cookie: `dexbotx_sid=${userSession.sid}` }).expect(302);
+      expect(await app.get(RedisService).client.get(`inviter:${G1}`)).toBe(USER_ID);
+      expect(await app.get(RedisService).client.ttl(`inviter:${G1}`)).toBeGreaterThan(590);
+    } finally {
+      register.mockRestore();
+      await app.get(RedisService).client.del(`inviter:${G1}`);
+      await app.get(SessionService).destroy(userSession.sid);
+    }
   });
 
   it('never stores the Discord token in plain text', async () => {
@@ -496,12 +581,15 @@ describe('DexBotX API', () => {
         { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
         { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
       );
-      await app.get(RedisService).client.lpush('stat:ev:recent_logins', JSON.stringify({
+      const redis = app.get(RedisService).client;
+      await redis.del('stat:ev:recent_logins');
+      const recentLogin = JSON.stringify({
         id: USER_ID,
         username: 'tester',
         avatarHash: null,
         at: new Date().toISOString(),
-      }));
+      });
+      await redis.lpush('stat:ev:recent_logins', recentLogin, recentLogin);
       const revokedSession = await app.get(SessionService).create(
         { id: '666666666666666666', username: 'revoke-me', global_name: null, avatar: null },
         { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
@@ -509,10 +597,13 @@ describe('DexBotX API', () => {
       const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
       const users = await http().get('/admin/users').set(cookie).expect(200);
       expect(users.body.activeSessions).toEqual(expect.any(Number));
+      expect(users.body.recentLogins).toHaveLength(1);
       expect(users.body.recentLogins[0]).toMatchObject({ id: USER_ID, username: 'tester' });
       expect(Object.keys(users.body.recentLogins[0]).sort()).toEqual(['avatar', 'id', 'username']);
       await http().post('/admin/users/666666666666666666/revoke').set(cookie).expect(201, { revoked: 1 });
       expect(await app.get(SessionService).get(revokedSession.sid)).toBeNull();
+      expect(await app.get(RedisService).client.exists('usess:666666666666666666')).toBe(0);
+      await redis.del('stat:ev:recent_logins');
   });
 
   it('lists and confirms background deletion, clears guild references, and audits it', async () => {
@@ -597,6 +688,103 @@ describe('DexBotX API', () => {
     const detail = await http().get(`/admin/guilds/${G1}`).set(cookie).expect(200);
     expect(detail.body.guild).toMatchObject({ id: G1, name: 'Alpha Guild', ownerId: null });
     expect(detail.body.channels).toHaveLength(2);
+  });
+
+  it('sends admin messages only to cached guild channels and audits successful and failed attempts', async () => {
+    const adminSession = await app.get(SessionService).create(
+      { id: ADMIN_ID, username: 'admin', global_name: 'Admin', avatar: null },
+      { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' },
+    );
+    const cookie = { Cookie: `dexbotx_sid=${adminSession.sid}`, Origin: WEB };
+    const redis = app.get(RedisService).client;
+    const hourlyKey = `rl:admin-message:guild:${G1}`;
+    const cachedChannels = [
+      { id: C1, type: 0, name: 'welcome', position: 1, parent_id: null },
+      { id: '555555555555555558', type: 0, name: 'general', position: 0, parent_id: null },
+      { id: '555555555555555559', type: 2, name: 'voice', position: 2, parent_id: null },
+    ];
+    const channelCacheKey = `discord:cache:channels:${G1}`;
+    const systemChannelCacheKey = `discord:cache:system-channel:${G1}`;
+    await redis.set(channelCacheKey, JSON.stringify(cachedChannels), 'EX', 3600);
+    await redis.set(systemChannelCacheKey, JSON.stringify(C1), 'EX', 900);
+    await redis.del(hourlyKey);
+    expect(await redis.get(channelCacheKey)).toBe(JSON.stringify(cachedChannels));
+    expect((await app.get(DiscordRestService).getGuildChannels(G1)).map(({ id }) => id))
+      .toEqual(cachedChannels.map(({ id }) => id));
+    const callCountBefore = discordCalls.length;
+    const auditBefore = await app.get(DatabaseService).db
+      .select({ id: adminAudit.id })
+      .from(adminAudit)
+      .where(eq(adminAudit.action, 'guild.message'));
+
+    try {
+      await http().post(`/admin/guilds/${G1}/message`).set(authed()).send({ content: 'not an admin' }).expect(404);
+
+      const channelList = await http().get(`/admin/guilds/${G1}/channels-for-message`).set(cookie).expect(200);
+      expect(channelList.body).toEqual({
+        channels: [
+          { id: '555555555555555558', name: 'general', isDefault: false },
+          { id: C1, name: 'welcome', isDefault: true },
+        ],
+        defaultChannelId: C1,
+      });
+      expect(discordCalls.length).toBe(callCountBefore);
+
+      const message = 'Maintenance starts at 8 PM.';
+      await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({
+        content: message,
+        embed: { title: 'Notice', description: 'Please plan ahead.', color: '#5b4bff' },
+      }).expect(201, { ok: true, channelId: C1 });
+      const sentCall = discordCalls.find((call) =>
+        call.method === 'POST' && call.path === `/channels/${C1}/messages` &&
+        JSON.stringify(call.init.body).includes(message),
+      );
+      expect(sentCall).toBeTruthy();
+      const sentPayload = JSON.parse(String(sentCall?.init.body));
+      expect(sentPayload.content).toBe(message);
+      expect(sentPayload.allowed_mentions).toEqual({ parse: [], users: [] });
+      expect(sentPayload.embeds[0]).toMatchObject({ title: 'Notice', description: 'Please plan ahead.', color: 0x5b4bff });
+
+      await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({
+        channelId: C_OTHER_GUILD,
+        content: 'Wrong server channel',
+      }).expect(400);
+
+      await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({ content: 'Second message' }).expect(201);
+      await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({ content: 'Third message' }).expect(201);
+      const limited = await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({ content: 'Fourth message' }).expect(429);
+      expect(limited.body.retryAfter).toEqual(expect.any(Number));
+      expect(limited.headers['retry-after']).toBe(String(limited.body.retryAfter));
+
+      await redis.del(hourlyKey);
+      failAdminMessageStatus = 403;
+      const denied = await http().post(`/admin/guilds/${G1}/message`).set(cookie).send({ content: 'Discord denies this' }).expect(422);
+      expect(denied.body).toMatchObject({
+        code: 'CANNOT_POST',
+        message: 'DexBotX cannot post in #welcome',
+      });
+
+      const auditRows = await app.get(DatabaseService).db.select().from(adminAudit)
+        .where(eq(adminAudit.action, 'guild.message'));
+      const newAudits = auditRows.filter((row) => row.id > Math.max(0, ...auditBefore.map(({ id }) => id)));
+      expect(newAudits).toHaveLength(6);
+      expect(newAudits.filter((row) => row.details.success === true)).toHaveLength(3);
+      expect(newAudits.filter((row) => row.details.success === false)).toHaveLength(3);
+      const successAudit = newAudits.find((row) => row.details.preview === message);
+      expect(successAudit?.details).toMatchObject({
+        guildId: G1,
+        channelId: C1,
+        channelName: 'welcome',
+        length: message.length,
+        sha256: sha256Hex(message),
+        preview: message,
+      });
+      expect(successAudit?.adminId).toBe(ADMIN_ID);
+    } finally {
+      failAdminMessageStatus = null;
+      await redis.del(hourlyKey, channelCacheKey, systemChannelCacheKey);
+      await app.get(SessionService).destroy(adminSession.sid);
+    }
   });
 
   it('audits admin server writes and requires an exact server-name confirmation to leave', async () => {
@@ -703,7 +891,8 @@ describe('DexBotX API', () => {
     const minuteKey = `stat:min:${Math.floor(Date.now() / 60_000)}`;
     const totalBefore = Number(await redis.hget(minuteKey, 'd_total') ?? 0);
     const rateLimitsBefore = Number(await redis.hget(minuteKey, 'd_429') ?? 0);
-    await discord.getGuildChannels(G1);
+    const fetchedChannels = await discord.getGuildChannels(G1);
+    await redis.del(`discord:cache:channels:${G1}`);
     rateLimitGuildChannels = true;
     await expect(discord.getGuildChannels(G1)).rejects.toMatchObject({ status: 429 });
     rateLimitGuildChannels = false;
@@ -721,6 +910,7 @@ describe('DexBotX API', () => {
     });
     expect(events[0].route).not.toContain(G1);
 
+    await redis.set(`discord:cache:channels:${G1}`, JSON.stringify(fetchedChannels), 'EX', 3600);
     discordCalls.length = 0;
     expect(await discord.getGuildChannels(G1)).toHaveLength(4);
     expect(discordCalls).toHaveLength(0);
@@ -743,7 +933,7 @@ describe('DexBotX API', () => {
     const inviteUrl = byId[G3].inviteUrl;
     if (!inviteUrl) throw new Error('Expected a bot invite URL for a server without the bot');
     const invite = new URL(inviteUrl);
-    expect(invite.searchParams.get('permissions')).toBe('268487680');
+    expect(invite.searchParams.get('permissions')).toBe('1099780443270');
     expect(invite.searchParams.get('guild_id')).toBe(G3);
     expect(res.body.guilds[0].id).toBe(G1); // installed first
   });
@@ -1074,14 +1264,181 @@ describe('DexBotX API', () => {
     expect(last).toBe(429);
   });
 
-  it('logs out, destroys the session and revokes the token', async () => {
+  it('destroys every indexed session for a user', async () => {
+    const sessions = app.get(SessionService);
+    const userId = '444444444444444444';
+    const user = { id: userId, username: 'multi-session', global_name: null, avatar: null };
+    const token = { access_token: 'tok-abc', token_type: 'Bearer', expires_in: 604800, refresh_token: 'r', scope: 'identify guilds' } as const;
+    const created = await Promise.all([sessions.create(user, token), sessions.create(user, token)]);
+    const redis = app.get(RedisService).client;
+    const indexKey = `usess:${userId}`;
+    expect(await redis.scard(indexKey)).toBe(2);
+
+    expect(await sessions.destroyAllForUser(userId)).toBe(2);
+    expect(await redis.exists(indexKey)).toBe(0);
+    for (const { sid } of created) expect(await sessions.get(sid)).toBeNull();
+  });
+
+  it('logs out idempotently, removes the session index and cache, and revokes the token', async () => {
+    const login = await http().get('/auth/login').expect(302);
+    const state = new URL(login.headers.location).searchParams.get('state')!;
+    const stateCookie = cookieFrom(login, 'dexbotx_oauth')!;
+    const callback = await http().get(`/auth/callback?code=abc&state=${state}`).set('Cookie', stateCookie).expect(302);
+    const logoutCookie = cookieFrom(callback, 'dexbotx_sid')!;
+    const logoutAuth = { Cookie: logoutCookie, Origin: WEB };
     discordCalls.length = 0;
-    await http().post('/auth/logout').set({ Cookie: sessionCookie }).expect(403); // CSRF applies here too
-    const logout = await http().post('/auth/logout').set(authed()).expect(204);
+    await http().post('/auth/logout').set({ Cookie: logoutCookie }).expect(403); // CSRF applies here too
+    const sid = logoutCookie.split('=')[1];
+    const sidHash = sha256Hex(sid);
+    const redis = app.get(RedisService).client;
+    const sessionKey = `sess:${sidHash}`;
+    const userIndexKey = `usess:${USER_ID}`;
+    expect(await redis.exists(sessionKey)).toBe(1);
+    expect(await redis.sismember(userIndexKey, sidHash)).toBe(1);
+    expect(Math.abs((await redis.ttl(userIndexKey)) - (await redis.ttl(sessionKey)))).toBeLessThanOrEqual(1);
+    await redis.set(`ug:${USER_ID}`, 'cached-user-data', 'EX', 60);
+
+    const logout = await http().post('/auth/logout').set(logoutAuth).expect(204);
     expect((logout.headers['set-cookie'] as unknown as string[]).some((c) => /^dbx_li=;/.test(c) && /Expires=/i.test(c))).toBe(true);
-    await http().get('/auth/me').set({ Cookie: sessionCookie }).expect(401);
+    expect(await redis.exists(sessionKey)).toBe(0);
+    expect(await redis.sismember(userIndexKey, sidHash)).toBe(0);
+    expect(await redis.exists(`ug:${USER_ID}`)).toBe(0);
+    const secondLogout = await http().post('/auth/logout').set(logoutAuth).expect(204);
+    expect((secondLogout.headers['set-cookie'] as unknown as string[]).some((c) => /^dexbotx_sid=;/.test(c) && /Expires=/i.test(c))).toBe(true);
+    await http().get('/auth/me').set({ Cookie: logoutCookie }).expect(401);
     await new Promise((r) => setTimeout(r, 100));
     expect(discordCalls.some((c) => c.path === '/oauth2/token/revoke')).toBe(true);
+  });
+});
+
+describe('Guild onboarding', () => {
+  it('skips startup guilds and sends once to the channel and a single inviter DM', async () => {
+    const bot = botModule.get(BotService);
+    const sync = botModule.get(GuildSyncService);
+    const startupGuild = onboardingGuild(
+      '111111111111111110',
+      [onboardingChannel('555555555555555510', 'general', 0)],
+    );
+    const onboardingGuildId = '111111111111111119';
+    const channelId = '555555555555555519';
+    const ownerId = '888888888888888880';
+    const channel = onboardingChannel(channelId, 'general', 0);
+    const guild = onboardingGuild(onboardingGuildId, [channel], channel);
+    const redis = botModule.get(RedisService).client;
+    const upsert = jest.spyOn(sync, 'upsert')
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    const syncGuild = jest.spyOn(sync, 'syncGuild').mockResolvedValue({} as never);
+    const ready = jest.spyOn(bot.client, 'isReady').mockReturnValue(false);
+
+    onboardingMessages.length = 0;
+    dmRecipients.length = 0;
+    failMessagePost = false;
+    messagePostFailures = 0;
+    try {
+      await bot.onGuildCreate(startupGuild);
+      expect(onboardingMessages).toHaveLength(0);
+      expect(dmRecipients).toHaveLength(0);
+
+      ready.mockReturnValue(true);
+      await redis.set(`inviter:${onboardingGuildId}`, ownerId, 'EX', 600, 'NX');
+      Object.assign(guild, { ownerId });
+      await bot.onGuildCreate(guild);
+      Object.assign(guild, { joinedTimestamp: Date.now() - 3 * 60 * 1000 });
+      await bot.onGuildCreate(guild);
+
+      expect(onboardingMessages).toHaveLength(2);
+      const channelMessage = onboardingMessages.find((message) => message.channelId === channelId);
+      expect(channelMessage?.body.allowed_mentions).toEqual({ parse: [], users: [ownerId] });
+      const channelEmbed = (channelMessage?.body.embeds as Array<{ title: string; description: string }>)[0];
+      expect(channelEmbed.title).toBe(`👋 Thanks for adding DexBotX to Guild ${onboardingGuildId}!`);
+      expect(channelEmbed.description).toContain(`Hi <@${ownerId}>!`);
+      expect(channelEmbed.description).toContain('Move my role up (required for moderation)');
+      expect(channelEmbed.description).toContain('Discord places my role at the bottom of the role list');
+      expect(channelEmbed.description).toContain('Keep it below your Admin/Owner roles');
+      expect(channelEmbed.description).toContain('server owners can never be timed out, kicked, or banned');
+      expect(channelEmbed.description).toContain('https://dexbotx.vercel.app/dashboard');
+      expect(dmRecipients).toEqual([ownerId]);
+      const dmMessage = onboardingMessages.find((message) => message.channelId === `dm-${ownerId}`);
+      expect(dmMessage).toBeTruthy();
+      expect(dmMessage?.body.allowed_mentions).toEqual({ parse: [], users: [] });
+      const dmEmbed = (dmMessage?.body.embeds as Array<{ description: string }>)[0];
+      expect(dmEmbed.description).toContain(`I also posted a short hello in <#${channelId}>`);
+      expect(dmEmbed.description).toContain('Move my role up (required for moderation)');
+      expect(dmEmbed.description).toContain('https://dexbotx.vercel.app/dashboard');
+      expect(dmEmbed.description).not.toContain(`<@${ownerId}>`);
+      expect(await redis.exists(`onboard:${onboardingGuildId}`)).toBe(1);
+
+      const noChannelGuildId = '111111111111111116';
+      const privateChannelId = '555555555555555516';
+      const privateChannel = onboardingChannel(privateChannelId, 'general', 0, false);
+      const noChannelGuild = onboardingGuild(noChannelGuildId, [privateChannel], privateChannel);
+      upsert.mockResolvedValueOnce(true);
+      await bot.onGuildCreate(noChannelGuild);
+      expect(dmRecipients).toEqual([ownerId, noChannelGuild.ownerId]);
+      expect(onboardingMessages.some((message) => message.channelId === privateChannelId)).toBe(false);
+      const noChannelDm = onboardingMessages.find((message) => message.channelId === `dm-${noChannelGuild.ownerId}`);
+      const noChannelEmbed = (noChannelDm?.body.embeds as Array<{ description: string }>)[0];
+      expect(noChannelEmbed.description).not.toContain('I also posted a short hello');
+    } finally {
+      ready.mockRestore();
+      upsert.mockRestore();
+      syncGuild.mockRestore();
+    }
+  });
+
+  it('prefers the system channel and never chooses a channel hidden from everyone', () => {
+    const system = onboardingChannel('system', 'rules', 10);
+    const general = onboardingChannel('general', 'general', 0);
+    const guild = onboardingGuild('guild', [system, general], system);
+    const me = { id: 'bot' } as GuildMember;
+
+    expect(findOnboardingChannel(guild, me)?.id).toBe('system');
+
+    const privateSystem = onboardingChannel('private-system', 'system', 0, false);
+    const privateGeneral = onboardingChannel('private-general', 'general', 1, false);
+    const publicLobby = onboardingChannel('public-lobby', 'lobby', 2);
+    const noPublicSystem = onboardingGuild('guild', [privateGeneral, publicLobby], privateSystem);
+    expect(findOnboardingChannel(noPublicSystem, me)?.id).toBe('public-lobby');
+
+    const noNamedPublic = onboardingGuild(
+      'guild',
+      [onboardingChannel('private', 'general', 0, false), onboardingChannel('first', 'off-topic', 2), onboardingChannel('second', 'support', 1)],
+    );
+    expect(findOnboardingChannel(noNamedPublic, me)?.id).toBe('second');
+  });
+
+  it('keeps channel and DM sends independent and omits unknown inviter mentions', async () => {
+    const onboarding = botModule.get(OnboardingService);
+    onboardingMessages.length = 0;
+    dmRecipients.length = 0;
+    failOnboardingDm = true;
+    try {
+      const closedDm = await onboarding.sendOnce(
+        '111111111111111118',
+        'Closed DM',
+        '555555555555555518',
+        '777777777777777718',
+        '777777777777777718',
+      );
+      expect(closedDm).toEqual({ channel: 'sent', dm: 'dm-closed' });
+      expect(onboardingMessages).toHaveLength(1);
+      expect(onboardingMessages[0].body.allowed_mentions).toEqual({ parse: [], users: ['777777777777777718'] });
+    } finally {
+      failOnboardingDm = false;
+    }
+
+    const noChannel = await onboarding.sendOnce('111111111111111117', 'No Channel', undefined, undefined, '777777777777777717');
+    expect(noChannel).toEqual({ channel: 'skipped', dm: 'sent' });
+    expect(dmRecipients).toEqual(['777777777777777717']);
+    const dm = onboardingMessages.find((message) => message.channelId === 'dm-777777777777777717');
+    const channelMessage = onboardingMessages.find((message) => message.channelId === '555555555555555518');
+    const channelEmbed = (channelMessage?.body.embeds as Array<{ description: string }>)[0];
+    expect(channelEmbed.description).toContain('Hi <@777777777777777718>!');
+    const dmEmbed = (dm?.body.embeds as Array<{ description: string }>)[0];
+    expect(dmEmbed.description).toContain('Hi! You (or someone in No Channel) just added DexBotX.');
+    expect(dmEmbed.description).not.toContain('<@');
   });
 });
 
@@ -1174,6 +1531,127 @@ describe('Bot → queue → worker', () => {
       channelId: C1,
       user: { id: '888888888888888888', username: 'newbie', displayName: 'Newbie', avatarUrl: 'https://cdn.discordapp.com/embed/avatars/1.png' },
       guild: { name: 'Alpha Guild', memberCount: 121, bannerUrl: null },
+    });
+  });
+
+  describe('Moderation commands', () => {
+    const moderatorId = '777777777777777777';
+    const targetId = '888888888888888888';
+    const botId = '123456789012345678';
+    const ownerId = '666666666666666666';
+
+    function fakeKickInteraction(guildId: string, targetPosition = 2) {
+      const makeRole = (position: number) => ({
+        position,
+        comparePositionTo: (other: { position: number }) => position - other.position,
+      });
+      const moderator = {
+        id: moderatorId,
+        user: { id: moderatorId, tag: 'Moderator#0001' },
+        permissions: { has: () => true },
+        roles: { highest: makeRole(4) },
+      } as unknown as GuildMember;
+      const targetUser = {
+        id: targetId,
+        tag: 'Target#0001',
+        bot: false,
+        send: jest.fn().mockResolvedValue(undefined),
+      };
+      const target = {
+        id: targetId,
+        user: targetUser,
+        roles: { highest: makeRole(targetPosition) },
+        kickable: true,
+      } as unknown as GuildMember;
+      const bot = {
+        id: botId,
+        permissions: { has: () => true },
+        roles: { highest: makeRole(6) },
+      } as unknown as GuildMember;
+      const kick = jest.fn().mockResolvedValue(undefined);
+      const guild = {
+        id: guildId,
+        name: 'Test Guild',
+        ownerId,
+        client: { user: { id: botId } },
+        members: {
+          me: bot,
+          fetch: jest.fn(async (id: string) => id === moderatorId ? moderator : target),
+          kick,
+        },
+      } as unknown as Guild;
+      const interaction = {
+        commandName: 'kick',
+        guild,
+        guildId,
+        user: moderator.user,
+        options: {
+          getUser: () => targetUser,
+          getMember: () => target,
+          getString: (name: string) => name === 'reason' ? 'typed reason' : null,
+        },
+        deferReply: jest.fn().mockResolvedValue(undefined),
+        editReply: jest.fn().mockResolvedValue(undefined),
+        reply: jest.fn().mockResolvedValue(undefined),
+        deferred: true,
+        replied: false,
+      } as unknown as ChatInputCommandInteraction;
+
+      return { interaction, kick, targetUser };
+    }
+
+    it('executes /kick through the fake Discord member stub and stores its audit row', async () => {
+      const guildId = '555555555555555555';
+      const fake = fakeKickInteraction(guildId);
+      await botModule.get(ModerationService).handle(fake.interaction);
+
+      expect(fake.kick).toHaveBeenCalledWith(targetId, 'Moderator#0001 (777777777777777777): typed reason');
+      expect(fake.targetUser.send).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'You were kicked from Test Guild. Reason: typed reason',
+        allowedMentions: { parse: [] },
+      }));
+      expect(fake.interaction.editReply).toHaveBeenCalledWith({
+        content: '✅ Kicked Target#0001',
+        allowedMentions: { parse: [] },
+      });
+      const rows = await app.get(DatabaseService).db.select().from(modActions).where(eq(modActions.guildId, guildId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        moderatorId,
+        targetId,
+        action: 'kick',
+        reason: 'typed reason',
+        durationSeconds: null,
+      });
+    });
+
+    it('rejects /kick when the target outranks the moderator', async () => {
+      const fake = fakeKickInteraction('555555555555555556', 5);
+      await botModule.get(ModerationService).handle(fake.interaction);
+
+      expect(fake.kick).not.toHaveBeenCalled();
+      expect(fake.interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'You can’t moderate them: their role is equal to or above yours.',
+      }));
+    });
+
+    it('rate limits /kick after 20 actions per moderator in one minute', async () => {
+      const guildId = '555555555555555557';
+      const redis = botModule.get(RedisService).client;
+      await redis.del(`moderation:${guildId}:${moderatorId}`);
+      try {
+        const service = botModule.get(ModerationService);
+        const interactions = Array.from({ length: 21 }, () => fakeKickInteraction(guildId));
+        for (const fake of interactions) await service.handle(fake.interaction);
+
+        expect(interactions.slice(0, 20).every(({ kick }) => kick.mock.calls.length === 1)).toBe(true);
+        expect(interactions[20].kick).not.toHaveBeenCalled();
+        expect(interactions[20].interaction.editReply).toHaveBeenCalledWith(expect.objectContaining({
+          content: expect.stringMatching(/^Slow down: try again in \d+s$/),
+        }));
+      } finally {
+        await redis.del(`moderation:${guildId}:${moderatorId}`);
+      }
     });
   });
 

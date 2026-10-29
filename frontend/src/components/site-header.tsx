@@ -1,24 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Logo } from '@/components/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { UserMenu } from '@/components/user-menu';
-import { clearLoginHintCookie, cn, hasLoginHintCookie } from '@/lib/utils';
+import { hasLoginHintCookie, setLoggedOutHintCookie, cn } from '@/lib/utils';
 import { useGetMeQuery } from '@/store/api';
 import { useEffect, useState } from 'react';
 
 export function SiteHeader() {
-  const pathname = usePathname();
   const [hasLoginHint, setHasLoginHint] = useState(false);
   useEffect(() => setHasLoginHint(hasLoginHintCookie()), []);
-  const { data: me, isLoading, error } = useGetMeQuery(undefined, { skip: !hasLoginHint });
+  const { data: me, isLoading, error } = useGetMeQuery(undefined, {
+    skip: !hasLoginHint,
+    refetchOnMountOrArgChange: true,
+  });
 
   useEffect(() => {
     if (error && 'status' in error && error.status === 401) {
-      clearLoginHintCookie();
+      setLoggedOutHintCookie();
       setHasLoginHint(false);
     }
   }, [error]);
@@ -29,7 +30,7 @@ export function SiteHeader() {
         <Logo />
         <nav aria-label="Main" className="flex items-center gap-2">
           <ThemeToggle />
-          {hasLoginHint && isLoading && !pathname.startsWith('/dashboard') ? (
+          {isLoading ? (
             <div className="h-9 w-28 animate-pulse rounded-full bg-muted" />
           ) : me ? (
             <>

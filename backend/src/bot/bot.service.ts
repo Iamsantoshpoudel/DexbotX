@@ -1,25 +1,31 @@
 import { Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import {
   ActivityType,
+  AuditLogEvent,
   ChannelType,
   Client,
   Events,
   GatewayIntentBits,
   Guild,
   GuildMember,
+  type ChatInputCommandInteraction,
   Options,
   PartialGuildMember,
   PermissionFlagsBits,
   Partials,
+  type GuildBasedChannel,
 } from 'discord.js';
 import { APP_CONFIG, AppConfig } from '../core/config';
 import { RateLimiter } from '../redis/rate-limiter.service';
+import { RedisService } from '../redis/redis.service';
 import { SettingsCache } from '../redis/settings-cache.service';
 import { MemberEventsQueue } from '../queue/member-events.queue';
 import type { MessageKind } from '../shared/message-config';
 import { GuildSyncService } from './guild-sync.service';
 import { StatsService } from '../admin/stats.service';
 import { FeatureFlagsService } from '../core/feature-flags.service';
+import { OnboardingService } from '../discord/onboarding.service';
+import { ModerationService } from './moderation.service';
 
 @Injectable()
 export class BotService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -38,6 +44,9 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
     private readonly sync: GuildSyncService,
     private readonly stats: StatsService,
     private readonly featureFlags: FeatureFlagsService,
+    private readonly onboarding: OnboardingService,
+    private readonly redis: RedisService,
+    private readonly moderation: ModerationService,
   ) {
     this.client = new Client({
       // Server Members is a privileged intent: enable it in the Developer Portal (Bot > Privileged Gateway Intents).
@@ -61,10 +70,11 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   async onApplicationBootstrap(): Promise<void> {
     const c = this.client;
     c.once(Events.ClientReady, (ready) => this.onReady(ready));
-    c.on(Events.GuildCreate, (g) => this.safe('guildCreate', async () => {
-      await this.sync.upsert(g);
-      await this.sync.syncGuild(g.id);
-    }));
+    c.on(Events.GuildCreate, (g) => this.safe('guildCreate', () => this.onGuildCreate(g)));
+    c.on(Events.InteractionCreate, (interaction) => {
+      if (!interaction.isChatInputCommand() || !interaction.guild) return;
+      void this.handleModerationInteraction(interaction);
+    });
     c.on(Events.GuildUpdate, (_old, g) => this.safe('guildUpdate', () => this.sync.guildUpdated(g)));
     c.on(Events.GuildDelete, (g) => {
       if (g.available === false) return; // outage, not a kick
@@ -126,6 +136,25 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
       await fn();
     } catch (err) {
       this.logger.error(`${name} handler failed: ${(err as Error).stack ?? err}`);
+    }
+  }
+
+  private async handleModerationInteraction(interaction: ChatInputCommandInteraction): Promise<void> {
+    try {
+      await this.moderation.handle(interaction);
+    } catch {
+      this.logger.error(`Moderation interaction failed in guild ${interaction.guildId}`);
+      await this.moderation.recordUnexpectedFailure(interaction.commandName);
+      try {
+        const reply = {
+          content: 'Something went wrong while processing that moderation command.',
+          allowedMentions: { parse: [] as const },
+        };
+        if (interaction.deferred || interaction.replied) await interaction.editReply(reply);
+        else await interaction.reply({ ...reply, ephemeral: true });
+      } catch {
+        this.logger.warn(`Could not send moderation error response in guild ${interaction.guildId}`);
+      }
     }
   }
 
@@ -214,4 +243,74 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
       },
     });
   }
+
+  async onGuildCreate(guild: Guild): Promise<void> {
+    const inserted = await this.sync.upsert(guild);
+    await this.sync.syncGuild(guild.id);
+    if (!this.client.isReady()) return;
+
+    const joinedAt = guild.joinedTimestamp;
+    const joinedRecently = joinedAt !== null && joinedAt <= Date.now() && Date.now() - joinedAt <= 2 * 60 * 1000;
+    if (!inserted && !joinedRecently) return;
+
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    const inviterId = await this.findInviter(guild);
+    let channelId: string | undefined;
+    try {
+      const me = guild.members.me ?? await guild.members.fetchMe();
+      channelId = findOnboardingChannel(guild, me)?.id;
+    } catch {
+      channelId = undefined;
+    }
+    await this.onboarding.sendOnce(
+      guild.id,
+      guild.name,
+      channelId,
+      inviterId,
+      inviterId ?? guild.ownerId,
+    );
+  }
+
+  private async findInviter(guild: Guild): Promise<string | undefined> {
+    const cached = await this.redis.client.get(`inviter:${guild.id}`);
+    if (cached) return cached;
+    try {
+      const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 5 });
+      const botId = this.client.user?.id;
+      return logs.entries.find((entry) => entry.target?.id === botId)?.executor?.id;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+export function findOnboardingChannel(guild: Guild, me: GuildMember): GuildBasedChannel | undefined {
+  const isUsable = (channel: GuildBasedChannel): boolean => {
+    if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) return false;
+    const everyonePermissions = channel.permissionsFor(guild.roles.everyone);
+    if (!everyonePermissions?.has(PermissionFlagsBits.ViewChannel)) return false;
+    const botPermissions = channel.permissionsFor(me);
+    return Boolean(botPermissions?.has([
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.SendMessages,
+      PermissionFlagsBits.EmbedLinks,
+    ]));
+  };
+
+  if (guild.systemChannel && isUsable(guild.systemChannel)) return guild.systemChannel;
+
+  const channels = [...guild.channels.cache.values()].filter(isUsable);
+  const preferredNames = ['general', 'chat', 'main', 'lounge', 'welcome', 'lobby'];
+  const named = channels
+    .filter((channel) => preferredNames.includes(channel.name.toLowerCase()))
+    .sort((a, b) =>
+      preferredNames.indexOf(a.name.toLowerCase()) - preferredNames.indexOf(b.name.toLowerCase()) ||
+      channelPosition(a) - channelPosition(b),
+    );
+  return named[0] ?? channels.sort((a, b) => channelPosition(a) - channelPosition(b))[0];
+}
+
+function channelPosition(channel: GuildBasedChannel): number {
+  return 'position' in channel && typeof channel.position === 'number' ? channel.position : 0;
 }

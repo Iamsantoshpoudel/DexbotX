@@ -1,6 +1,7 @@
 'use client';
 
 import { Search, X } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Card, Skeleton } from '@/components/ui/misc';
 import { errorMessage } from '@/lib/errors';
@@ -106,10 +107,14 @@ export default function AdminServersPage() {
                 {data?.guilds.length ? data.guilds.map((guild) => (
                   <tr key={guild.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(guild.id)}>
                     <td className="px-4 py-3">
-                      <button type="button" onClick={() => setSelectedId(guild.id)} className="text-left font-medium text-primary hover:underline">
+                      <Link
+                        href={`/admin/servers/${encodeURIComponent(guild.id)}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="text-left font-medium text-primary hover:underline"
+                      >
                         {guild.name}
                         <span className="mt-0.5 block font-mono text-xs font-normal text-muted-foreground">{guild.id}</span>
-                      </button>
+                      </Link>
                     </td>
                     <td className="px-4 py-3 tabular-nums">{guild.memberCount.toLocaleString('en-US')}</td>
                     <td className="px-4 py-3 font-mono text-xs">{guild.ownerId ?? '—'}</td>

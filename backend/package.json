@@ -19,7 +19,8 @@
     "test:e2e": "jest --config jest.e2e.config.js --runInBand --forceExit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node dist/db/migrate.js",
-    "db:backfill-guild-data": "node dist/db/backfill-guild-data.js"
+    "db:backfill-guild-data": "node dist/db/backfill-guild-data.js",
+    "commands:deploy": "tsc --target ES2022 --module commonjs --esModuleInterop --skipLibCheck --rootDir . --outDir dist scripts/register-commands.ts && node dist/scripts/register-commands.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

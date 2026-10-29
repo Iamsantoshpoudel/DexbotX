@@ -7,13 +7,18 @@ import { SettingsCache } from '../redis/settings-cache.service';
 import { GUILD_CHANNELS_CHANGED_CHANNEL, GUILD_SYNCED_CHANNEL, guildChannelsCacheKey } from '../guilds/guild-events';
 import { GuildSyncService } from './guild-sync.service';
 
-function makeService() {
+function makeService(inserted = true) {
   const deletes: Array<{ table: unknown; condition: unknown }> = [];
   const inserts: Array<{ table: unknown; values: unknown }> = [];
   const makeInsert = (table: unknown) => ({
     values: jest.fn((values: unknown) => {
       inserts.push({ table, values });
-      return { onConflictDoUpdate: jest.fn(async () => undefined) };
+      return {
+        onConflictDoUpdate: jest.fn(async () => undefined),
+        onConflictDoNothing: jest.fn(() => ({
+          returning: jest.fn(async () => inserted ? [{ id: 'guild-123' }] : []),
+        })),
+      };
     }),
   });
   const tx = {
@@ -119,13 +124,20 @@ describe('GuildSyncService', () => {
 
   it('records guild joins and leaves', async () => {
     const { service, stats, redisClient } = makeService();
-    await service.upsert({ id: 'guild-123' } as never);
+    await expect(service.upsert({ id: 'guild-123' } as never)).resolves.toBe(true);
     await service.markLeft('guild-123');
     expect(stats.incr).toHaveBeenCalledWith('guild_joins');
     expect(stats.incr).toHaveBeenCalledWith('guild_leaves');
     expect(redisClient.incr).toHaveBeenCalledTimes(2);
     expect(redisClient.incr).toHaveBeenNthCalledWith(1, 'guild:guild-123:rev');
     expect(redisClient.incr).toHaveBeenNthCalledWith(2, 'guild:guild-123:rev');
+  });
+
+  it('reports an existing guild as not newly inserted', async () => {
+    const { service, database } = makeService(false);
+
+    await expect(service.upsert({ id: 'guild-123' } as never)).resolves.toBe(false);
+    expect(database.db.update).toHaveBeenCalled();
   });
 
   it('invalidates the exact channel key after an incremental channel write', async () => {

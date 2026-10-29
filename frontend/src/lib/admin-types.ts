@@ -92,6 +92,17 @@ export interface AdminGuildDetail {
   recentErrors: Array<{ guildId?: string; kind?: string; reason?: string; at?: string }>;
 }
 
+export interface AdminMessageChannels {
+  channels: Array<{ id: string; name: string; isDefault: boolean }>;
+  defaultChannelId: string | null;
+}
+
+export interface AdminMessageInput {
+  channelId?: string;
+  content: string;
+  embed?: { title?: string; description?: string; color?: string | number };
+}
+
 export interface AdminFailure {
   id: string;
   kind: string;

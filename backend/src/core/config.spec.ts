@@ -21,7 +21,7 @@ describe('loadConfig', () => {
     expect(c.cookieSecure).toBe(true);
     expect(c.databaseSsl).toBe(true);
     expect(c.shardCount).toBe(1);
-    expect(c.botPermissions).toBe('268487680');
+    expect(c.botPermissions).toBe('1099780443270');
     expect(c.adminUserIds).toEqual([]);
     expect(c.sessionKey).toHaveLength(32);
   });
@@ -35,6 +35,13 @@ describe('loadConfig', () => {
   it('accepts a configured shard count', () => {
     expect(loadConfig({ ...valid, SHARD_COUNT: '3' } as NodeJS.ProcessEnv).shardCount).toBe(3);
     expect(() => loadConfig({ ...valid, SHARD_COUNT: 'auto' } as NodeJS.ProcessEnv)).toThrow(/SHARD_COUNT/);
+  });
+
+  it('accepts an optional Discord support URL', () => {
+    expect(loadConfig(valid as NodeJS.ProcessEnv).discordSupportUrl).toBeUndefined();
+    expect(loadConfig({ ...valid, DISCORD_SUPPORT_URL: 'https://discord.gg/example' } as NodeJS.ProcessEnv).discordSupportUrl)
+      .toBe('https://discord.gg/example');
+    expect(() => loadConfig({ ...valid, DISCORD_SUPPORT_URL: 'not-a-url' } as NodeJS.ProcessEnv)).toThrow(/DISCORD_SUPPORT_URL/);
   });
 
   it('fails fast with readable errors', () => {

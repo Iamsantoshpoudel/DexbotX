@@ -10,6 +10,7 @@ import { SettingsCache } from '../redis/settings-cache.service';
 import { AssetStorage, BACKGROUND_PATH_RE } from '../storage/asset-storage.service';
 import { AdminAuditService } from './admin-audit.service';
 import { FeatureFlags, FeatureFlagsService } from '../core/feature-flags.service';
+import { SessionService } from '../auth/session.service';
 
 @Injectable()
 export class AdminUsersContentService {
@@ -20,6 +21,7 @@ export class AdminUsersContentService {
     private readonly storage: AssetStorage,
     private readonly audit: AdminAuditService,
     private readonly flags: FeatureFlagsService,
+    private readonly sessions: SessionService,
   ) {}
 
   async users() {
@@ -27,15 +29,19 @@ export class AdminUsersContentService {
       this.redis.client.lrange('stat:ev:recent_logins', 0, 49),
       this.activeSessionCount(),
     ]);
+    const seenUsers = new Set<string>();
+    const recentLogins = logins.flatMap((raw) => {
+      const login = JSON.parse(raw) as { id: string; username: string; avatarHash?: string | null };
+      if (seenUsers.has(login.id)) return [];
+      seenUsers.add(login.id);
+      return [{
+        id: login.id,
+        username: login.username,
+        avatar: userAvatarUrl(login.id, login.avatarHash, 128),
+      }];
+    });
     return {
-      recentLogins: logins.map((raw) => {
-        const login = JSON.parse(raw) as { id: string; username: string; avatarHash?: string | null };
-        return {
-          id: login.id,
-          username: login.username,
-          avatar: userAvatarUrl(login.id, login.avatarHash, 128),
-        };
-      }),
+      recentLogins,
       activeSessions,
     };
   }
@@ -58,9 +64,11 @@ export class AdminUsersContentService {
       });
     }
     if (removed.length) await this.redis.client.del(...removed);
+    const indexedRemoved = await this.sessions.destroyAllForUser(userId);
     await this.redis.client.del('admin:users:active-sessions');
-    await this.audit.log(adminId, 'user.revoke_sessions', userId, { revoked: removed.length });
-    return { revoked: removed.length };
+    const revoked = removed.length + indexedRemoved;
+    await this.audit.log(adminId, 'user.revoke_sessions', userId, { revoked });
+    return { revoked };
   }
 
   async content() {

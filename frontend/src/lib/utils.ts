@@ -15,8 +15,8 @@ export function hasLoginHintCookie(): boolean {
   return typeof document !== 'undefined' && document.cookie.split(';').some((cookie) => cookie.trim() === 'dbx_li=1');
 }
 
-export function clearLoginHintCookie(): void {
+export function setLoggedOutHintCookie(): void {
   if (typeof document === 'undefined') return;
   const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `dbx_li=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+  document.cookie = `dbx_li=0; Max-Age=2592000; Path=/; SameSite=Lax${secure}`;
 }

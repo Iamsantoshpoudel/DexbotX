@@ -152,6 +152,7 @@ export class AdminOperationsService {
       `guild:${guildId}:channels`,
       `guild:${guildId}:meta`,
       `discord:cache:channels:${guildId}`,
+      `discord:cache:system-channel:${guildId}`,
       `guild:${guildId}:roles`,
     ];
     await this.redis.client.del(...keys);
@@ -185,7 +186,12 @@ export class AdminOperationsService {
     if (confirm !== guild.name) throw new BadRequestException('Confirmation must exactly match the server name');
     await this.discord.leaveGuild(guildId);
     await this.database.db.update(guilds).set({ installed: false, leftAt: new Date(), updatedAt: new Date() }).where(eq(guilds.id, guildId));
-    await this.redis.client.del(`guild:${guildId}:meta`, `guild:${guildId}:channels`, `discord:cache:channels:${guildId}`);
+    await this.redis.client.del(
+      `guild:${guildId}:meta`,
+      `guild:${guildId}:channels`,
+      `discord:cache:channels:${guildId}`,
+      `discord:cache:system-channel:${guildId}`,
+    );
     await this.audit.log(adminId, 'guild.leave', guildId, { name: guild.name });
     return { ok: true };
   }

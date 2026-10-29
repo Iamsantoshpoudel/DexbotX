@@ -8,7 +8,7 @@ envVarGroups:
       - key: WEB_URL
         value: https://dexbotx.vercel.app
       - key: WS_PUBLIC_URL
-        value: wss://dexbotx-zq8g.onrender.com/ws
+        value: wss://dexbotx.vercel.app/ws
       - key: TRUST_PROXY
         value: "1"
       - key: DATABASE_SSL
@@ -16,7 +16,9 @@ envVarGroups:
       - key: DATABASE_POOL_MAX
         value: "10"
       - key: BOT_PERMISSIONS
-        value: "268487680"
+        value: "268487688"
+      - key: DISCORD_SUPPORT_URL
+        value: ""
       - key: ADMIN_USER_IDS
         value: ""
       - key: SHARD_COUNT

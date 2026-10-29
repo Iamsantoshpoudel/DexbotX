@@ -1,24 +1,16 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
+import { BreadcrumbStructuredData } from '@/components/seo/json-ld';
+import { SiteFooter } from '@/components/site-footer';
 import { SiteHeader } from '@/components/site-header';
+import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 import { SITE } from '@/lib/site';
 
-export const metadata: Metadata = {
-  title: 'Privacy Policy',
-  description: 'Learn what information DexBotX handles when you use its Discord welcome and goodbye bot, dashboard, and custom avatar cards.',
-  alternates: { canonical: '/privacy' },
-  openGraph: {
-    type: 'website',
-    url: '/privacy',
-    title: 'Privacy Policy',
-    description: 'Learn what information DexBotX handles when you use its Discord welcome and goodbye bot, dashboard, and custom avatar cards.',
-  },
-  robots: { index: true, follow: true },
-};
+export const metadata: Metadata = createPageMetadata({ path: '/privacy', ...PUBLIC_PAGE_SEO.privacy });
 
 export default function PrivacyPage() {
   return (
     <>
+      <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }, { name: 'Privacy Policy', path: '/privacy' }]} />
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
         <p className="text-sm text-muted-foreground">Effective October 19, 2026</p>
@@ -82,12 +74,8 @@ export default function PrivacyPage() {
             </p>
           </section>
         </div>
-        <p className="mt-10 text-sm text-muted-foreground">
-          <Link href="/terms" className="text-primary underline underline-offset-4">Terms of Service</Link>
-          {' · '}
-          <Link href="/" className="text-primary underline underline-offset-4">Home</Link>
-        </p>
       </main>
+      <SiteFooter />
     </>
   );
 }

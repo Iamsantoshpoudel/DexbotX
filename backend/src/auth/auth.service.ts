@@ -8,10 +8,10 @@ import { SessionService } from './session.service';
 
 const STATE_TTL_SECONDS = 600;
 
-/** Only same-site dashboard paths are allowed as post-login destinations (prevents open redirects). */
+/** Only same-site dashboard/admin paths are allowed as post-login destinations (prevents open redirects). */
 export function safeReturnTo(value: unknown): string {
   if (typeof value !== 'string') return '/dashboard';
-  if (!/^\/dashboard(\/[A-Za-z0-9_-]+)*\/?$/.test(value)) return '/dashboard';
+  if (!/^\/(?:dashboard|admin)(?:\/[A-Za-z0-9_-]+)*\/?$/.test(value)) return '/dashboard';
   return value;
 }
 
@@ -71,6 +71,7 @@ export class AuthService {
     const session = await this.sessions.get(sid);
     await this.sessions.destroy(sid);
     if (session) {
+      await this.redis.client.del(`ug:${session.userId}`);
       this.discord.revokeToken(this.sessions.accessToken(session)).catch(() => undefined);
     }
   }

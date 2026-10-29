@@ -67,6 +67,7 @@ export interface DiscordGuild {
   banner?: string | null;
   approximate_member_count?: number;
   owner_id?: string;
+  system_channel_id?: string | null;
 }
 
 export interface DiscordRole {
@@ -205,10 +206,16 @@ export class DiscordRestService {
   async getGuildChannels(guildId: string): Promise<DiscordChannel[]> {
     const key = `discord:cache:channels:${guildId}`;
     const cached = await this.redis.client.get(key);
+    if (cached) return JSON.parse(cached) as DiscordChannel[];
+
     const blockedUntil = Number(await this.redis.client.get('discord:blocked_until'));
     if (blockedUntil > Date.now()) {
-      if (cached) return JSON.parse(cached) as DiscordChannel[];
-      throw new DiscordApiError(429, undefined, 'Discord is temporarily rate limited and no cached channels are available.', Math.ceil((blockedUntil - Date.now()) / 1000));
+      throw new DiscordApiError(
+        429,
+        undefined,
+        'Discord is temporarily rate limited and no cached channels are available.',
+        Math.ceil((blockedUntil - Date.now()) / 1000),
+      );
     }
 
     const channels = await this.request<DiscordChannel[]>(`/guilds/${guildId}/channels`, { headers: this.bot() });
@@ -280,11 +287,24 @@ export class DiscordRestService {
     return this.request<DiscordGuild>(`/guilds/${guildId}?with_counts=true`, { headers: this.bot() });
   }
 
-  async createMessage(channelId: string, message: BuiltMessage, mentionUserIds: string[]): Promise<void> {
+  async createDmChannel(userId: string): Promise<{ id: string }> {
+    return this.request<{ id: string }>('/users/@me/channels', {
+      method: 'POST',
+      headers: { ...this.bot(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient_id: userId }),
+    });
+  }
+
+  async createMessage(
+    channelId: string,
+    message: BuiltMessage,
+    mentions: string[] | { users: string[] } = [],
+  ): Promise<void> {
+    const users = Array.isArray(mentions) ? mentions : mentions.users;
     const payload = {
       content: message.content,
       embeds: message.embeds,
-      allowed_mentions: { parse: [], users: mentionUserIds },
+      allowed_mentions: { parse: [], users },
       ...(message.file ? { attachments: [{ id: 0, filename: message.file.name }] } : {}),
     };
     if (!message.file) {
