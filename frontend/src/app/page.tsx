@@ -87,7 +87,7 @@ export default function Home() {
               DexBotX Discord Bot
             </h1>
             <p className="mt-5 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              One free, open-source bot for moderation, welcome and goodbye messages, auto roles, anti-spam, social notifications, and AI chat. Configure the features available to your server in a straightforward web dashboard.
+              Free and open source, DexBotX brings anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and moderation tools together with easy web dashboard setup.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a href="/api/invite" className={cn(buttonVariants({ size: 'lg' }))}>

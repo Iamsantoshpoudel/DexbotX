@@ -8,7 +8,7 @@ envVarGroups:
       - key: WEB_URL
         value: https://dexbotx.vercel.app
       - key: WS_PUBLIC_URL
-        value: wss://dexbotx.vercel.app/ws
+        value: wss://thedexbotx.onrender.com/ws
       - key: TRUST_PROXY
         value: "1"
       - key: DATABASE_SSL

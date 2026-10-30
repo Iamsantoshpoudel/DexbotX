@@ -8,48 +8,48 @@ export const metadata = createPageMetadata({ path: '/features', ...PUBLIC_PAGE_S
 
 const CORE_FEATURES = [
   {
-    name: 'Fast and reliable',
-    description: 'DexBotX brings common server tools together in one bot and dashboard, with configuration designed to be straightforward for community teams.',
+    name: 'Anti-Spam',
+    description: 'Add anti-spam tools to your server’s moderation and community-management setup.',
   },
   {
-    name: 'Open source and free',
-    description: 'Invite and use DexBotX without a subscription. The project source is publicly available for anyone to review.',
-    href: '/about',
-    linkText: 'About the open-source project',
+    name: 'Social Notifications',
+    description: 'Keep your community updated with social activity, including supported YouTube and Kick notifications.',
   },
   {
-    name: 'Easy web dashboard configuration',
-    description: 'Sign in with Discord, choose a server you can manage, and configure available server settings in the web dashboard.',
-    href: '/commands',
-    linkText: 'Read the setup guide',
+    name: 'AI Auto Chat',
+    description: 'Add AI-powered conversations to your community and review its available options in the dashboard.',
   },
   {
-    name: 'AI auto chat',
-    description: 'AI auto chat is part of the DexBotX feature set. Check the dashboard for the options currently available to your server.',
+    name: 'Auto Roles',
+    description: 'Use role automation to support member onboarding and organize your server.',
   },
   {
-    name: 'Social notifications',
-    description: 'Keep community members informed with social notifications. Review currently available sources and settings in the dashboard.',
-  },
-  {
-    name: 'Anti-spam',
-    description: 'Anti-spam tools are part of the bot’s community-management feature set and complement your server moderation practices.',
-  },
-  {
-    name: 'Auto roles management',
-    description: 'Use role automation to support member onboarding and server organization. Discord role permissions and hierarchy still apply.',
-  },
-  {
-    name: 'Welcome and goodbye',
-    description: 'Configure separate join and departure messages, choose channels, customize the copy and member cards, and preview changes in the dashboard.',
+    name: 'Welcome and Goodbye',
+    description: 'Configure separate join and departure messages, customize text and member cards, and preview changes in the dashboard.',
     href: '/features/welcome-bot',
     linkText: 'Explore welcome and goodbye messages',
   },
   {
-    name: 'Moderation commands',
-    description: 'Use slash commands to kick, ban, unban, timeout, or remove a timeout from a member. Discord permissions and role hierarchy are checked.',
+    name: 'Auto Moderation',
+    description: 'The automatic moderation module is marked coming soon in the dashboard. Kick, ban, unban, and timeout slash commands are available now.',
     href: '/commands',
-    linkText: 'View commands, permissions, and examples',
+    linkText: 'View available moderation commands',
+  },
+  {
+    name: 'Web Dashboard Easy Setup',
+    description: 'Sign in with Discord, choose a server you can manage, and configure available features through a visual dashboard.',
+    href: '/dashboard',
+    linkText: 'Open the dashboard',
+  },
+  {
+    name: 'Open Source and Free',
+    description: 'Use DexBotX without a subscription and review the project source on GitHub.',
+    href: '/about',
+    linkText: 'About the open-source project',
+  },
+  {
+    name: 'Fast and Reliable',
+    description: 'DexBotX brings common server tools together in one bot and dashboard, with configuration designed to be straightforward for community teams.',
   },
 ] as const;
 
@@ -65,7 +65,7 @@ export default function FeaturesPage() {
               DexBotX features for Discord communities
             </h1>
             <p className="mt-5 max-w-3xl leading-7 text-muted-foreground">
-              DexBotX is a free, open-source Discord bot with an easy web dashboard. Its core feature set brings member onboarding, moderation, and community automation into one place.
+              DexBotX is a free, open-source Discord bot with an easy web dashboard for anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and moderation.
             </p>
             <div className="mt-6"><AddToDiscordButton /></div>
           </header>

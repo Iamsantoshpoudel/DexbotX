@@ -1,14 +1,20 @@
 # DexBotX
 
-DexBotX is an open-source Discord bot and web dashboard for configuring welcome and goodbye messages. Messages can include custom text, embeds, and generated image cards.
+DexBotX is an all-in-one Discord community bot built to help servers stay safer, more welcoming, and easier to manage. It brings anti-spam, social notifications, AI chat, auto roles, and personalized welcome and goodbye messages together in a fast, reliable, free, open-source bot with an easy web dashboard. Automatic moderation is coming soon.
 
 ## Features
 
-- Configure and preview welcome and goodbye messages for Discord servers.
-- Send test messages and optionally upload custom card backgrounds.
-- Sign in with Discord OAuth and manage servers from a web dashboard.
-- Process member events with a Redis-backed queue and separate workers.
-- View service and moderation tools in an optional admin console.
+- **Anti-Spam**
+- **Social Notifications**
+- **AI Auto Chat**
+- **Auto Roles**
+- **Welcome and Goodbye**
+- **Auto Moderation** (coming soon; moderation slash commands are available)
+- **Web Dashboard Easy Setup**
+- **Open Source and Free**
+- **Fast and Reliable**
+
+**Not available yet:** Economy features, 24/7 music with custom playlists, and self-service editing of the bot's profile image, banner, or description are planned ideas, not features of the current release.
 
 ## Architecture
 
@@ -32,7 +38,7 @@ BOT & BACKGROUND FLOW                         ┊
 ───────────────────────────────────────────── ▼─────────────────────────────────────────────
 ┌─────────────────┐   ┌────────────┐   ┌──────┴───────┐   ┌──────────────┐   ┌─────────────┐
 │ Discord Gateway │[4]│ Bot shards │[5]│ BullMQ queue │[6]│ Queue worker │[7]│ Discord API │
-│  gateway events │──▶│ guild sync │──▶│ member jobs  │──▶│ renders msgs │──▶│     REST    │
+│  gateway events │──▶│ guild sync │──▶│ member jobs  │──▶│ renders msgs │──▶│    REST   │
 └─────────────────┘   └─────┬──────┘   └──────────────┘   └───────┬──────┘   └─────────────┘
                             │                                     ▲
                             ▼                                     │
@@ -56,7 +62,7 @@ The frontend proxies API requests through `/api/*`. The backend runs as three lo
 
 You can run the app on any hosting provider that supports the required Node.js processes, PostgreSQL, and Redis. The dashboard needs a Node.js/Next.js host or a compatible container host. Custom background uploads are optional and currently use Supabase Storage; the rest of the app does not require Supabase.
 
-## Run locally
+## Run locally 
 
 1. Configure the backend:
 
@@ -132,4 +138,3 @@ Contributions and bug reports are welcome. Keep secrets out of commits, include 
 <div align="center">
   <img src="./Coding.gif" alt="Vipe Coded" width="350" />
 </div>
-

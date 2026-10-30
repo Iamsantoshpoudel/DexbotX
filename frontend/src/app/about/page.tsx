@@ -26,7 +26,7 @@ export default function AboutPage() {
           <section aria-labelledby="project">
             <h2 id="project" className="text-2xl font-semibold text-foreground">The project</h2>
             <p className="mt-3">
-              DexBotX includes welcome and goodbye messages, member cards, and Discord moderation commands, alongside its broader feature set for dashboard configuration and community automation. The project is public and its source is available on GitHub.
+              DexBotX brings anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye messages, and auto moderation together with easy web dashboard setup. Automatic moderation is currently marked coming soon in the dashboard; moderation slash commands are available now. The project is free, open source, and built for fast, reliable community automation.
             </p>
             <p className="mt-3">
               Explore the <Link className="text-primary underline underline-offset-4" href="/features">DexBotX feature list</Link>, check the <Link className="text-primary underline underline-offset-4" href="/commands">moderation command reference</Link>, or read the <Link className="text-primary underline underline-offset-4" href="/faq">frequently asked questions</Link>.

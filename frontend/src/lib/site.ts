@@ -31,7 +31,7 @@ export const SITE = {
   brandName: 'DexBotX',
   title: 'DexBotX: Free Open Source Discord Bot for Your Server',
   description:
-    'DexBotX is a fast, reliable, free and open-source Discord bot with an easy dashboard for AI chat, social alerts, anti-spam, roles, welcomes, and moderation.',
+    'DexBotX is a fast, reliable, free and open-source Discord bot with easy web dashboard setup for anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and auto moderation.',
   keywords: [
     'DexBotX',
     'DexBotX Discord bot',
@@ -49,7 +49,7 @@ export const SITE = {
     'all in one Discord bot',
   ],
   tagline:
-    'Fast and reliable Discord automation, free and open source, with an easy web dashboard, AI auto chat, social notifications, anti-spam, auto roles, welcome and goodbye, and moderation commands.',
+    'Fast and reliable Discord automation, free and open source, with easy web dashboard setup for anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and auto moderation.',
   creator: 'DexGameX',
   siteUrl: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dexbotx.vercel.app').origin,
   githubUrl,
