@@ -3,8 +3,8 @@
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/misc';
+import { Loader } from '@/components/ui/loader';
 import { errorMessage, errorStatus } from '@/lib/errors';
 import { useGetMeQuery } from '@/store/api';
 
@@ -22,19 +22,11 @@ export function DashboardAuthGate({ children }: { children: ReactNode }) {
   }, [pathname, status]);
 
   if (status === 401) {
-    return (
-      <div className="grid min-h-[50dvh] place-items-center" role="status" aria-label="Loading">
-        <Loader2 className="size-8 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-      </div>
-    );
+    return <Loader />;
   }
 
   if (isLoading || (!data && !error)) {
-    return (
-      <div className="grid min-h-[50dvh] place-items-center" role="status" aria-label="Loading">
-        <Loader2 className="size-8 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-      </div>
-    );
+    return <Loader />;
   }
 
   if (error || !data) {
