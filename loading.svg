@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="dbx" viewBox="0 0 867 879" width="160" role="img" aria-label="Loading">
+<title>Loading</title>
+<style>
+.dbx{--fg:var(--dbx-fg,#0a0a0a)}
+@media (prefers-color-scheme:dark){.dbx{--fg:var(--dbx-fg,#f5f5f5)}}
+.f{fill:var(--fg)}.b{fill:var(--bg)}
+.spin{animation:spin 2.4s infinite}.pulse{animation:pulse .6s ease-in-out infinite}.press{transition:transform .15s ease-out}
+.dbx:hover .spin{animation-duration:1.2s}.dbx:hover .pulse{animation-duration:.3s}.dbx:active .press{transform:scale(.8)}
+@keyframes spin{0%{transform:rotate(0);animation-timing-function:cubic-bezier(.7,0,.2,1)}25%{transform:rotate(90deg);animation-timing-function:cubic-bezier(.7,0,.2,1)}50%{transform:rotate(180deg);animation-timing-function:cubic-bezier(.7,0,.2,1)}75%{transform:rotate(270deg);animation-timing-function:cubic-bezier(.7,0,.2,1)}100%{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(.86)}}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.spin,.pulse{animation:none}.dbx{animation:breathe 1.6s ease-in-out infinite}}
+</style>
+<path class="f" d="M580.5 26.1V207.1A291.1 294.4 0 1 0 413.6 742.7V616.4A167.6 167.6 0 1 1 581.2 448.8L706.5 448.5V98.1A433.5 439.5 0 0 0 580.5 26.1Z"/>
+<g transform="translate(581.5 616.6)"><g class="spin"><g class="pulse"><g class="press"><path class="f" d="M0 -169.3A169.3 169.3 0 0 0 169.3 0A169.3 169.3 0 0 0 0 169.3A169.3 169.3 0 0 0 -169.3 0A169.3 169.3 0 0 0 0 -169.3Z"/></g></g></g></g>
+</svg>

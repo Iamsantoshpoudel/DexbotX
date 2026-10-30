@@ -1,80 +1,57 @@
 # DexBotX frontend
 
-The frontend is the Next.js 16 app for the public website, Discord dashboard, and private admin console. It uses the App Router, React, Tailwind CSS, and Redux Toolkit Query. The browser sends API requests to the same-origin `/api/*` proxy; the Next.js server forwards them to the NestJS backend.
+The frontend is a Next.js app for the public website, Discord dashboard, and admin console. It uses the App Router, React, Tailwind CSS, and Redux Toolkit Query. Browser API calls use the same-origin `/api/*` route, which Next.js proxies to the backend.
 
 ## Requirements
 
 - Node.js 22 or newer and npm.
-- The backend running locally for login and API-backed pages.
+- The backend running locally for login and API-backed features.
 
 ## Local development
 
-From the repository root:
-
 ```powershell
-cd frontend
-Copy-Item .env.example .env.local
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. By default the API proxy targets `http://localhost:4000`; start the backend API on that port. The frontend `.env.local` file is for local development only and must not contain backend secrets.
+Open `http://localhost:3000`. The development API proxy defaults to `http://localhost:4000`; use `BACKEND_URL` to point to a different local API.
 
-## Environment variables
+## Configuration
 
 | Variable | Purpose |
 |---|---|
-| `BACKEND_URL` | Backend origin used by the `/api/*` proxy and Next.js rewrites. Defaults to `http://localhost:4000` in development. |
-| `NEXT_PUBLIC_WS_ORIGIN` | Public `ws://` or `wss://` origin allowed by the Content Security Policy for native dashboard updates. Defaults to the corresponding WebSocket origin for `BACKEND_URL`. |
-| `NEXT_PUBLIC_SITE_URL` | Public website origin used for canonical URLs and Open Graph metadata. |
-| `NEXT_PUBLIC_GITHUB_URL` | Public project/creator GitHub link in metadata. |
+| `BACKEND_URL` | Backend HTTP(S) origin. Set explicitly for production; it is read at **build time** because the proxy rewrite is baked into the Next.js output. |
+| `NEXT_PUBLIC_WS_ORIGIN` | Public WebSocket origin allowed by the app's security policy. Set to the backend's `wss://` origin in production; if omitted, it is derived from `BACKEND_URL`. |
+| `NEXT_PUBLIC_SITE_URL` | Public website URL used for canonical and social metadata. |
+| `NEXT_PUBLIC_GITHUB_URL` | Public GitHub link used by the site. |
 | `NEXT_PUBLIC_DISCORD_SERVER_URL` | Public Discord community invite. |
-| `NEXT_PUBLIC_BANNER_GIF` | Public banner image path or absolute URL for social metadata. |
+| `NEXT_PUBLIC_BANNER_GIF` | Public banner path or URL used for social metadata. |
 
-For Vercel, set **Root Directory** to `frontend`. Configure `BACKEND_URL` to the HTTPS backend origin, `NEXT_PUBLIC_WS_ORIGIN` to the matching public `wss://` origin, and `NEXT_PUBLIC_SITE_URL` to the deployed website URL. The `NEXT_PUBLIC_*` values are public and must never contain credentials.
+Values prefixed with `NEXT_PUBLIC_` are included in browser-visible output and must not contain secrets. The backend should serve HTTPS in production; the dashboard must be able to reach it, and its WebSocket endpoint must allow secure WebSocket connections.
+
+## Deployment
+
+Deploy on any provider that supports the Next.js Node.js server or the included Dockerfile. Configure the project root as `frontend/` when deploying from the repository. Set `BACKEND_URL` to the backend's public HTTPS origin before building, and set the public metadata variables for your deployment.
+
+The API proxy keeps browser requests and the session cookie on the dashboard origin. Do not expose backend secrets in frontend environment variables. For Docker deployments, the image uses Next.js standalone output.
 
 ## Routes
 
-| Route | Description |
+| Route | Purpose |
 |---|---|
-| `/` | Public landing page and bot invitation |
-| `/dashboard` | List of Discord servers the signed-in user can manage |
-| `/dashboard/[guildId]` | Server overview and welcome/goodbye settings |
-| `/dashboard/[guildId]/[kind]` | Welcome or goodbye message editor |
-| `/dashboard/[guildId]/music` · `/social` | Feature pages in the dashboard |
-| `/admin` | Admin overview: service health, activity, shards, and queue |
-| `/admin/rate-limits` | Discord API usage and rate-limit diagnostics |
-| `/admin/servers` · `/admin/failures` | Installed servers and failed member-event jobs |
-| `/admin/users` · `/admin/content` | Recent logins, sessions, presets, and stored backgrounds |
-| `/admin/settings` · `/admin/audit` | Global feature flags and paged admin audit history |
-
-Dashboard and admin route checks in `src/proxy.ts` redirect users without a session cookie to Discord login. The backend validates the session and enforces guild or admin authorization on every API request. Admin access is configured through backend `ADMIN_USER_IDS`; hiding a link or protecting a page in the frontend is not a security boundary.
-
-The admin UI is under `src/app/admin/`, shared UI components are in `src/components/admin/`, and its API endpoints are isolated in `src/store/adminApi.ts`. Admin data is polled by the relevant page only; data remains visible while a refresh is in progress.
-
-## Social previews
-
-Site-wide Open Graph and Twitter metadata is configured in `src/app/layout.tsx` and uses only the 680 × 240 GIF configured by `NEXT_PUBLIC_BANNER_GIF`. Social networks may cache previews after a page or image changes.
+| `/` | Public landing page |
+| `/dashboard` | Discord servers the signed-in user can manage |
+| `/dashboard/[guildId]` | Server settings |
+| `/admin` | Admin tools; access is enforced by the backend |
 
 ## Commands
 
-Run these from `frontend/`:
-
 | Command | Purpose |
 |---|---|
-| `npm run dev` | Start the local development server |
-| `npm run build` | Build the production Next.js app |
+| `npm run dev` | Start local development |
+| `npm run build` | Build for production |
 | `npm run start` | Serve the production build |
-| `npm run lint` | Lint the frontend |
-| `npm run typecheck` | Run TypeScript checks |
-| `npm test` | Run frontend unit tests |
-| `npm run analyze` | Build/analyze bundles using the bundle analyzer |
-
-## Security and caching
-
-- Browser API calls use same-origin `/api/*`, so the HTTP-only session cookie is not exposed to client-side JavaScript or sent directly to a separate API origin.
-- The proxy forwards requests to `BACKEND_URL`; production requires HTTPS except local/Compose backends.
-- Admin authorization is enforced by the backend, and the admin layout is marked `noindex`.
-- API responses are not cached by the Next.js proxy. RTK Query retains and refreshes data according to each endpoint's usage.
-- The server configuration pages use one native WebSocket per tab, authenticated with a short-lived ticket from `/api/ws/ticket`. Channel events refresh the open server's channel list from the API cache; reconnects perform one channel-list revalidation. The socket is paused after a tab remains hidden for 60 seconds.
-- `src/app/robots.ts` disallows crawling `/api`, `/dashboard`, and `/admin`.
+| `npm run lint` | Lint frontend source |
+| `npm run typecheck` | TypeScript checks |
+| `npm test` | Run frontend tests |
+| `npm run analyze` | Analyze the production bundle |

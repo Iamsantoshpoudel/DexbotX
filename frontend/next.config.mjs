@@ -6,9 +6,10 @@
  * BACKEND_URL is read at BUILD time (rewrites are baked into the standalone output).
  */
 const isDev = process.env.NODE_ENV !== 'production';
-const configuredBackendUrl = (process.env.BACKEND_URL ?? (
-  isDev ? 'http://localhost:4000' : 'https://dexbotx-zq8g.onrender.com'
-)).trim();
+const configuredBackendUrl = (process.env.BACKEND_URL ?? (isDev ? 'http://localhost:4000' : '')).trim();
+if (!configuredBackendUrl) {
+  throw new Error('BACKEND_URL is required to build the frontend for production');
+}
 const isBareLocalhost = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::\d+)?(?:\/.*)?$/i.test(configuredBackendUrl);
 const BACKEND_URL = (isDev && isBareLocalhost ? `http://${configuredBackendUrl}` : configuredBackendUrl).replace(/\/+$/, '');
 const backendUrl = new URL(BACKEND_URL);
