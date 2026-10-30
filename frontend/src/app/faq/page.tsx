@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
-import { BreadcrumbStructuredData, FaqStructuredData } from '@/components/seo/json-ld';
+import { PublicSiteHeader } from '@/components/public-site-header';
+import { FaqStructuredData } from '@/components/seo/json-ld';
+import { PublicBreadcrumbs } from '@/components/seo/public-page';
 import { FAQS, PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 
 export const metadata = createPageMetadata({ path: '/faq', ...PUBLIC_PAGE_SEO.faq });
@@ -9,15 +10,10 @@ export const metadata = createPageMetadata({ path: '/faq', ...PUBLIC_PAGE_SEO.fa
 export default function FaqPage() {
   return (
     <>
-      <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }, { name: 'FAQ', path: '/faq' }]} />
       <FaqStructuredData items={FAQS} />
-      <SiteHeader />
+      <PublicSiteHeader />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link className="underline-offset-4 hover:underline" href="/">Home</Link>
-          <span aria-hidden="true" className="px-2">/</span>
-          <span aria-current="page">FAQ</span>
-        </nav>
+        <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'FAQ', path: '/faq' }]} />
         <article className="mt-8">
           <h1 className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl">DexBotX Discord Bot FAQ</h1>
           <p className="mt-5 max-w-3xl leading-7 text-muted-foreground">
@@ -40,7 +36,7 @@ export default function FaqPage() {
               DexBotX uses a dashboard for server configuration. After adding the bot, sign in with Discord and select a server you are allowed to manage. The controls shown in the dashboard are the best place to confirm current availability, since features and their options can change as the project develops.
             </p>
             <p>
-              Explore the guides for <Link className="text-primary underline underline-offset-4" href="/features/moderation">moderation</Link>, <Link className="text-primary underline underline-offset-4" href="/features/welcome-bot">welcome and goodbye messages</Link>, <Link className="text-primary underline underline-offset-4" href="/features/auto-roles">auto roles</Link>, <Link className="text-primary underline underline-offset-4" href="/features/youtube-notifications">social notifications</Link>, and <Link className="text-primary underline underline-offset-4" href="/features/ai-chat">AI auto chat</Link>. You can also ask for assistance in the support Discord server or review the source on GitHub through the site footer.
+              Explore <Link className="text-primary underline underline-offset-4" href="/features">all DexBotX features</Link>, see <Link className="text-primary underline underline-offset-4" href="/commands">moderation command examples</Link>, or ask for help in the support Discord server. The <Link className="text-primary underline underline-offset-4" href="/about">About page</Link> links to project source and contact options.
             </p>
           </section>
         </article>

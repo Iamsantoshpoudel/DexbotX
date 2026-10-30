@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
+import { PublicSiteHeader } from '@/components/public-site-header';
 import { BreadcrumbStructuredData } from '@/components/seo/json-ld';
 import { SITE } from '@/lib/site';
 import { createPageMetadata, FEATURE_PAGES } from '@/lib/seo';
@@ -47,7 +47,7 @@ export default async function FeaturePage({ params }: { params: Promise<{ slug: 
   return (
     <>
       <BreadcrumbStructuredData items={breadcrumbs} />
-      <SiteHeader />
+      <PublicSiteHeader />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
           <ol className="flex flex-wrap gap-2">

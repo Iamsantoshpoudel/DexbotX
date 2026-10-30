@@ -19,6 +19,8 @@ export const ONBOARDING_STEPS = [
   '**2️⃣ Configure me from the dashboard**',
   'Set up moderation, welcome/goodbye messages, auto roles, anti-spam, social notifications, and AI chat in one place:',
   '🔗 https://dexbotx.vercel.app/dashboard',
+  '',
+  '🎉Thank you for choosing DexBotX 💖'
 ];
 
 export const ONBOARDING_SUPPORT_LINE = 'Need help or new features? Join our community: {supportUrl}';

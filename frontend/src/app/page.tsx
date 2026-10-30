@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Suspense } from 'react';
-import { LoginErrorBanner } from '@/components/login-error-banner';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
+import { PublicSiteHeader } from '@/components/public-site-header';
 import { CardMock } from '@/components/preview/card-mock';
-import { FaqStructuredData, SiteStructuredData } from '@/components/seo/json-ld';
+import { BreadcrumbStructuredData, FaqStructuredData, SiteStructuredData } from '@/components/seo/json-ld';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/misc';
 import { FAQS, HOME_SEO, createPageMetadata } from '@/lib/seo';
@@ -76,13 +73,10 @@ export default function Home() {
   return (
     <>
       <SiteStructuredData />
+      <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }]} />
       <FaqStructuredData items={HOME_FAQS} />
-      <SiteHeader />
+      <PublicSiteHeader />
       <main>
-        <Suspense fallback={null}>
-          <LoginErrorBanner />
-        </Suspense>
-
         <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 pb-20 pt-16 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:pt-24">
           <div className="fade-up">
             <p className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs text-muted-foreground">
@@ -118,7 +112,22 @@ export default function Home() {
           </div>
         </section>
 
-        <section id="features" aria-labelledby="features-heading" className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+        <section aria-labelledby="public-guides" className="border-y border-border/70 bg-card/40">
+          <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+            <h2 id="public-guides" className="text-3xl font-semibold tracking-tight">Explore DexBotX</h2>
+            <p className="mt-3 max-w-2xl leading-7 text-muted-foreground">
+              Learn about the bot, how its moderation commands work, and where to find setup and privacy information.
+            </p>
+            <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <li><Link className="font-medium text-primary underline-offset-4 hover:underline" href="/features">Explore all DexBotX features</Link></li>
+              <li><Link className="font-medium text-primary underline-offset-4 hover:underline" href="/commands">Read command permissions and examples</Link></li>
+              <li><Link className="font-medium text-primary underline-offset-4 hover:underline" href="/faq">Get answers in the DexBotX FAQ</Link></li>
+              <li><Link className="font-medium text-primary underline-offset-4 hover:underline" href="/about">Meet the project and its maintainer</Link></li>
+            </ul>
+          </div>
+        </section>
+
+        <section id="features" aria-labelledby="features-heading" className="mx-auto max-w-6xl p-5 px-4 pb-20 sm:px-6">
           <div className="max-w-3xl">
             <h2 id="features-heading" className="text-3xl font-semibold tracking-tight">Discord automation for everyday server needs</h2>
             <p className="mt-3 leading-7 text-muted-foreground">
@@ -139,7 +148,7 @@ export default function Home() {
         </section>
 
         <section id="how-to-add" aria-labelledby="how-to-add-heading" className="border-y border-border/70 bg-card/40">
-          <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+          <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
             <h2 id="how-to-add-heading" className="text-3xl font-semibold tracking-tight">How to add DexBotX to your Discord server</h2>
             <ol className="mt-8 grid gap-5 md:grid-cols-3">
               <li className="rounded-xl border border-border bg-background p-5">
@@ -161,7 +170,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section aria-labelledby="why-heading" className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+        <section aria-labelledby="why-heading" className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
           <div className="max-w-3xl">
             <h2 id="why-heading" className="text-3xl font-semibold tracking-tight">Why choose DexBotX?</h2>
             <p className="mt-3 leading-7 text-muted-foreground">
@@ -200,7 +209,7 @@ export default function Home() {
           <p className="mt-4 text-sm text-muted-foreground">This is a general workflow comparison, not a claim about a specific competing bot.</p>
         </section>
 
-        <section id="faq" aria-labelledby="faq-heading" className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">
+        <section id="faq" aria-labelledby="faq-heading" className="mx-auto max-w-3xl px-4 p-20 sm:px-6">
           <h2 id="faq-heading" className="text-3xl font-semibold tracking-tight">DexBotX Discord bot questions</h2>
           <div className="mt-6 divide-y divide-border rounded-2xl border border-border bg-card/80">
             {HOME_FAQS.map(({ question, answer }) => (

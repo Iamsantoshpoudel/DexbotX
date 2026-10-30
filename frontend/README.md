@@ -24,8 +24,14 @@ Open `http://localhost:3000`. The development API proxy defaults to `http://loca
 | `NEXT_PUBLIC_WS_ORIGIN` | Public WebSocket origin allowed by the app's security policy. Set to the backend's `wss://` origin in production; if omitted, it is derived from `BACKEND_URL`. |
 | `NEXT_PUBLIC_SITE_URL` | Public website URL used for canonical and social metadata. |
 | `NEXT_PUBLIC_GITHUB_URL` | Public GitHub link used by the site. |
-| `NEXT_PUBLIC_DISCORD_SERVER_URL` | Public Discord community invite. |
-| `NEXT_PUBLIC_BANNER_GIF` | Public banner path or URL used for social metadata. |
+| `NEXT_PUBLIC_DISCORD_SUPPORT_URL` | Public Discord community invite. |
+| `NEXT_PUBLIC_YOUTUBE_PROFILE_URL` | Optional official YouTube profile URL shown on the About page and included in schema.org `sameAs`. |
+| `NEXT_PUBLIC_X_PROFILE_URL` | Optional X profile URL included in schema.org `sameAs`. |
+| `NEXT_PUBLIC_TWITCH_PROFILE_URL` | Optional Twitch profile URL included in schema.org `sameAs`. |
+| `NEXT_PUBLIC_INSTAGRAM_PROFILE_URL` | Optional Instagram profile URL included in schema.org `sameAs`. |
+| `NEXT_PUBLIC_LINKEDIN_PROFILE_URL` | Optional LinkedIn profile URL included in schema.org `sameAs`. |
+| `GOOGLE_SITE_VERIFICATION` | Optional Google Search Console verification token. |
+| `BING_SITE_VERIFICATION` | Optional Bing Webmaster Tools verification token. |
 
 Values prefixed with `NEXT_PUBLIC_` are included in browser-visible output and must not contain secrets. The backend should serve HTTPS in production; the dashboard must be able to reach it, and its WebSocket endpoint must allow secure WebSocket connections.
 

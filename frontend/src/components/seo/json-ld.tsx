@@ -18,18 +18,18 @@ function JsonLd({ data }: { data: JsonLdData }) {
 }
 
 export function SiteStructuredData() {
-  const personId = `${SITE.url}/#person`;
-  const organizationId = `${SITE.url}/#organization`;
+  const personId = `${SITE.siteUrl}/#person`;
+  const organizationId = `${SITE.siteUrl}/#organization`;
   const features = [
-    'Welcome and goodbye messages with personalized member cards',
-    'Moderation tools',
-    'Anti-spam automation',
-    'Automatic role management',
-    'Social notifications including YouTube and Kick',
-    'AI auto chat',
-    'Web dashboard configuration',
+    'Fast and reliable Discord automation',
     'Free and open source',
-    'Fast, reliable server automation',
+    'Easy web dashboard configuration',
+    'AI auto chat',
+    'Social notifications',
+    'Anti-spam',
+    'Automatic role management',
+    'Welcome and goodbye messages',
+    'Moderation commands',
   ];
 
   return (
@@ -40,39 +40,39 @@ export function SiteStructuredData() {
           {
             '@type': 'Person',
             '@id': personId,
-            name: 'dexgamex',
-            alternateName: SITE.creatorDisplayName,
-            url: SITE.url,
-            sameAs: [SITE.githubUrl, SITE.discordServerUrl],
+            name: SITE.creator,
+            url: SITE.githubUrl,
+            sameAs: SITE.profileUrls,
           },
           {
             '@type': 'Organization',
             '@id': organizationId,
-            name: SITE.brandName,
-            url: SITE.url,
+            name: SITE.creator,
+            url: SITE.siteUrl,
             founder: { '@id': personId },
-            sameAs: [SITE.githubUrl, SITE.discordServerUrl],
-            logo: { '@type': 'ImageObject', url: `${SITE.url}/icon.png` },
+            sameAs: SITE.profileUrls,
+            logo: { '@type': 'ImageObject', url: `${SITE.siteUrl}/icon.png` },
           },
           {
             '@type': 'WebSite',
-            '@id': `${SITE.url}/#website`,
+            '@id': `${SITE.siteUrl}/#website`,
             name: SITE.brandName,
-            url: SITE.url,
+            alternateName: ['Dex Bot X', 'DexGameX bot'],
+            url: SITE.siteUrl,
             description: SITE.description,
             publisher: { '@id': organizationId },
             inLanguage: 'en',
           },
           {
             '@type': 'SoftwareApplication',
-            '@id': `${SITE.url}/#software`,
+            '@id': `${SITE.siteUrl}/#software`,
             name: SITE.brandName,
-            applicationCategory: 'CommunicationApplication',
-            operatingSystem: 'Web, Discord',
-            url: SITE.url,
+            applicationCategory: 'UtilitiesApplication',
+            operatingSystem: 'Discord',
+            url: SITE.siteUrl,
             description: SITE.description,
-            image: `${SITE.url}/opengraph-image`,
-            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+            image: `${SITE.siteUrl}${SITE.socialImage.url}`,
+            offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
             author: { '@id': personId },
             publisher: { '@id': organizationId },
             featureList: features,
@@ -93,7 +93,7 @@ export function BreadcrumbStructuredData({ items }: { items: readonly { name: st
           '@type': 'ListItem',
           position: index + 1,
           name,
-          item: new URL(path, SITE.url).toString(),
+          item: new URL(path, SITE.siteUrl).toString(),
         })),
       }}
     />

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { BreadcrumbStructuredData } from '@/components/seo/json-ld';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
+import { PublicSiteHeader } from '@/components/public-site-header';
 import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 import { SITE } from '@/lib/site';
 
@@ -11,7 +11,7 @@ export default function PrivacyPage() {
   return (
     <>
       <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }, { name: 'Privacy Policy', path: '/privacy' }]} />
-      <SiteHeader />
+      <PublicSiteHeader />
       <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
         <p className="text-sm text-muted-foreground">Effective October 19, 2026</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">Privacy Policy</h1>

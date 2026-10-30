@@ -8,8 +8,8 @@ export function LogoMark({ className = 'size-10' }: { className?: string }) {
 
 export function Logo() {
   return (
-    <Link href="/" className="flex items-center gap-2.5 rounded-lg font-semibold tracking-tight">
-      <LogoMark className="size-12 shrink-0" />
+    <Link href="/" className="inline-flex w-fit items-center gap-2.5 rounded-lg font-semibold tracking-tight">
+      <LogoMark className="size-11 shrink-0" />
       <span className="text-lg">
         Dex<span className="text-primary">Bot</span>X
       </span>

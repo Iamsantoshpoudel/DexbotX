@@ -5,19 +5,19 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { ReactNode } from 'react';
 import { Providers } from '@/components/providers';
-import { HOME_SEO } from '@/lib/seo';
 import { SITE } from '@/lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(SITE.url),
-  title: { default: HOME_SEO.title, template: '%s' },
-  description: HOME_SEO.description,
-  keywords: HOME_SEO.keywords,
+  metadataBase: new URL(SITE.siteUrl),
+  title: { default: SITE.title, template: '%s' },
+  description: SITE.description,
+  keywords: SITE.keywords,
   applicationName: SITE.brandName,
   authors: [{ name: SITE.creator, url: SITE.githubUrl }],
   creator: SITE.creator,
   publisher: SITE.creator,
+  alternates: { canonical: '/' },
   category: 'technology',
   formatDetection: {
     telephone: false,
@@ -30,21 +30,16 @@ export const metadata: Metadata = {
     type: 'website',
     url: '/',
     siteName: SITE.brandName,
-    title: HOME_SEO.title,
-    description: HOME_SEO.description,
+    title: SITE.title,
+    description: SITE.description,
     locale: 'en_US',
-    images: [{
-      url: '/opengraph-image',
-      width: 1200,
-      height: 630,
-      alt: 'DexBotX, free open source Discord bot',
-    }],
+    images: [{ ...SITE.socialImage, alt: 'DexBotX, free open source Discord bot' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: HOME_SEO.title,
-    description: HOME_SEO.description,
-    images: ['/opengraph-image'],
+    title: SITE.title,
+    description: SITE.description,
+    images: [SITE.socialImage.url],
   },
   robots: {
     index: true,
@@ -57,10 +52,15 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
-  icons: { icon: '/icon.png', apple: '/apple-icon' },
+  icons: { icon: '/icon.png', apple: '/apple-icon.png' },
   manifest: '/manifest.webmanifest',
   verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ?? 'eHHX8HxZQ1RJEtBuFqKb6MlX9dfrLGgKeixurMjHiBQ',
+    ...(process.env.GOOGLE_SITE_VERIFICATION
+      ? { google: process.env.GOOGLE_SITE_VERIFICATION }
+      : {}),
+    ...(process.env.BING_SITE_VERIFICATION
+      ? { other: { 'msvalidate.01': process.env.BING_SITE_VERIFICATION } }
+      : {}),
   },
 };
 

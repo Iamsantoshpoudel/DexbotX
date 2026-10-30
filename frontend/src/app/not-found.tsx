@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
+import { PublicSiteHeader } from '@/components/public-site-header';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function NotFound() {
   return (
     <>
-      <SiteHeader />
+      <PublicSiteHeader />
       <main className="mx-auto grid min-h-[65dvh] max-w-md place-items-center px-6 text-center">
         <div>
           <p className="font-mono text-sm text-primary">404</p>

@@ -1,14 +1,7 @@
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
+import { FEATURE_PAGES } from '@/lib/seo';
 import { SITE } from '@/lib/site';
-
-const FEATURE_LINKS = [
-  { href: '/features/moderation', label: 'Discord moderation bot' },
-  { href: '/features/welcome-bot', label: 'Welcome and goodbye messages' },
-  { href: '/features/auto-roles', label: 'Auto roles' },
-  { href: '/features/youtube-notifications', label: 'YouTube and social notifications' },
-  { href: '/features/ai-chat', label: 'AI auto chat' },
-];
 
 export function SiteFooter() {
   return (
@@ -24,16 +17,22 @@ export function SiteFooter() {
           <div>
             <h2 className="font-medium">Features</h2>
             <ul className="mt-3 space-y-2 text-muted-foreground">
-              {FEATURE_LINKS.map(({ href, label }) => (
-                <li key={href}><Link className="underline-offset-4 hover:text-foreground hover:underline" href={href}>{label}</Link></li>
+              <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/features">All DexBotX features</Link></li>
+              {FEATURE_PAGES.map(({ slug, name }) => (
+                <li key={slug}>
+                  <Link className="underline-offset-4 hover:text-foreground hover:underline" href={`/features/${slug}`}>
+                    {name} for Discord
+                  </Link>
+                </li>
               ))}
             </ul>
           </div>
           <div>
             <h2 className="font-medium">Explore</h2>
             <ul className="mt-3 space-y-2 text-muted-foreground">
+              <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/">DexBotX home</Link></li>
               <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/about">About DexBotX</Link></li>
-              <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/commands">Commands and setup</Link></li>
+              <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/commands">Moderation commands and examples</Link></li>
               <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/faq">Frequently asked questions</Link></li>
             </ul>
           </div>
@@ -43,7 +42,10 @@ export function SiteFooter() {
               <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/terms">Terms of Service</Link></li>
               <li><Link className="underline-offset-4 hover:text-foreground hover:underline" href="/privacy">Privacy Policy</Link></li>
               <li><a className="underline-offset-4 hover:text-foreground hover:underline" href={SITE.githubUrl} target="_blank" rel="me noopener noreferrer">Source on GitHub</a></li>
-              <li><a className="underline-offset-4 hover:text-foreground hover:underline" href={SITE.discordServerUrl} target="_blank" rel="noopener noreferrer">Discord support server</a></li>
+              <li><a className="underline-offset-4 hover:text-foreground hover:underline" href={SITE.discordSupportUrl} target="_blank" rel="noopener noreferrer">Discord support server</a></li>
+              {SITE.youtubeProfileUrl && (
+                <li><a className="underline-offset-4 hover:text-foreground hover:underline" href={SITE.youtubeProfileUrl} target="_blank" rel="me noopener noreferrer">DexGameX on YouTube</a></li>
+              )}
             </ul>
           </div>
         </nav>

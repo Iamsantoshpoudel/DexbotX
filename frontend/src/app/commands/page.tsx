@@ -1,60 +1,98 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { SiteHeader } from '@/components/site-header';
-import { BreadcrumbStructuredData } from '@/components/seo/json-ld';
+import { PublicSiteHeader } from '@/components/public-site-header';
+import { PublicBreadcrumbs } from '@/components/seo/public-page';
 import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 
 export const metadata = createPageMetadata({ path: '/commands', ...PUBLIC_PAGE_SEO.commands });
 
+const COMMANDS = [
+  {
+    name: '/kick',
+    action: 'Removes a member from the server. They can join again with a valid invite.',
+    permission: 'Members with Kick Members; DexBotX also needs Kick Members.',
+    example: '/kick member:@member reason:Repeated spam',
+  },
+  {
+    name: '/ban',
+    action: 'Bans a user from the server. You can choose whether to delete none, one day, or seven days of their messages.',
+    permission: 'Members with Ban Members; DexBotX also needs Ban Members.',
+    example: '/ban user:@member delete_messages:1 day reason:Repeated abuse',
+  },
+  {
+    name: '/unban',
+    action: 'Removes a ban using the user’s Discord ID.',
+    permission: 'Members with Ban Members; DexBotX also needs Ban Members.',
+    example: '/unban user_id:<Discord user ID> reason:Appeal accepted',
+  },
+  {
+    name: '/timeout',
+    action: 'Prevents a member from interacting for a selected duration: 60 seconds, 5 or 10 minutes, 1 hour, 1 day, or 1 week.',
+    permission: 'Members with Moderate Members; DexBotX also needs Moderate Members.',
+    example: '/timeout member:@member duration:10 minutes reason:Repeated disruption',
+  },
+  {
+    name: '/untimeout',
+    action: 'Removes an active timeout from a member.',
+    permission: 'Members with Moderate Members; DexBotX also needs Moderate Members.',
+    example: '/untimeout member:@member',
+  },
+] as const;
+
 export default function CommandsPage() {
   return (
     <>
-      <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }, { name: 'Commands and setup', path: '/commands' }]} />
-      <SiteHeader />
-      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
-        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link className="underline-offset-4 hover:underline" href="/">Home</Link>
-          <span aria-hidden="true" className="px-2">/</span>
-          <span aria-current="page">Commands and setup</span>
-        </nav>
-        <article className="mt-8 space-y-7 leading-7 text-muted-foreground">
-          <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight text-foreground sm:text-5xl">
-            DexBotX commands and dashboard setup guide
-          </h1>
-          <p>
-            DexBotX uses a web dashboard for routine server configuration, so you do not need to memorize a list of commands to set up welcome messages and member cards. Sign in with Discord, choose a server you can manage, and use the visual settings available for that server. This page explains the setup workflow without inventing slash-command names that may not be available in every deployment.
-          </p>
-          <section>
-            <h2 className="text-2xl font-semibold text-foreground">Add the bot and open the dashboard</h2>
-            <ol className="mt-3 list-decimal space-y-3 pl-6">
-              <li>Use the <a className="text-primary underline underline-offset-4" href="/api/invite">Add to Discord</a> link and select a server where you have permission to add a bot.</li>
-              <li>Review the permissions shown by Discord and authorize the installation for the server you selected.</li>
-              <li>Open the <Link className="text-primary underline underline-offset-4" href="/dashboard">DexBotX dashboard</Link> and sign in with Discord.</li>
-              <li>Select the server you want to configure. The dashboard checks your access before showing server settings.</li>
-            </ol>
+      <PublicSiteHeader />
+      <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+        <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'Commands', path: '/commands' }]} />
+        <article className="mt-8 space-y-8">
+          <header>
+            <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+              DexBotX moderation slash commands
+            </h1>
+            <p className="mt-5 max-w-3xl leading-7 text-muted-foreground">
+              DexBotX provides five moderation commands. The permission shown in Discord controls who can invoke each command; the bot must also have the matching permission. Actions against server members are checked against Discord role hierarchy.
+            </p>
+          </header>
+
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[60rem] border-collapse text-left text-sm">
+              <caption className="sr-only">DexBotX moderation commands, required permissions, and examples</caption>
+              <thead className="bg-card">
+                <tr>
+                  <th scope="col" className="p-4 font-semibold">Command</th>
+                  <th scope="col" className="p-4 font-semibold">What it does</th>
+                  <th scope="col" className="p-4 font-semibold">Who can use it</th>
+                  <th scope="col" className="p-4 font-semibold">Example</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border text-muted-foreground">
+                {COMMANDS.map(({ name, action, permission, example }) => (
+                  <tr key={name}>
+                    <th scope="row" className="whitespace-nowrap p-4 font-mono font-semibold text-foreground">{name}</th>
+                    <td className="p-4">{action}</td>
+                    <td className="p-4">{permission}</td>
+                    <td className="p-4"><code className="whitespace-nowrap text-xs">{example}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <section aria-labelledby="using-commands">
+            <h2 id="using-commands" className="text-2xl font-semibold">Using slash-command examples</h2>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              Type the command in a server text channel and select the matching option in Discord’s slash-command menu. Replace <code>@member</code> with the member picker and <code>&lt;Discord user ID&gt;</code> with the target user’s numeric ID. The <code>/ban</code> command requires a message-deletion choice, and <code>/timeout</code> requires a duration. Optional reasons can be up to 400 characters.
+            </p>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              For actions against server members, the target’s highest role must be below both the moderator’s and DexBotX’s highest roles. DexBotX cannot moderate the server owner. See <Link className="text-primary underline underline-offset-4" href="/features">all DexBotX features and security details</Link> or the <Link className="text-primary underline underline-offset-4" href="/faq">FAQ</Link>.
+            </p>
           </section>
-          <section>
-            <h2 className="text-2xl font-semibold text-foreground">Configure welcome and goodbye messages</h2>
-            <p className="mt-3">
-              Open the welcome settings to choose a destination channel and edit the message. Available text variables can help personalize a greeting, and the card editor provides styles and a preview so you can review the design before saving it. Welcome and goodbye messages have independent settings, allowing a server to use a separate channel or tone for departures.
-            </p>
-            <p className="mt-3">
-              For a step-by-step explanation of the feature, read the <Link className="text-primary underline underline-offset-4" href="/features/welcome-bot">Discord welcome bot guide</Link>. Keep messages concise, give new members a useful next step, and confirm the selected channel is visible to the audience you intend.
-            </p>
-          </section>
-          <section>
-            <h2 className="text-2xl font-semibold text-foreground">Explore other bot settings</h2>
-            <p className="mt-3">
-              DexBotX is an all-in-one bot with product features including moderation, anti-spam, auto roles, social notifications for YouTube and Kick, and AI auto chat. The exact controls available can depend on the current deployment and server configuration. Use the dashboard as the source of truth for the settings available to your account rather than relying on a command list copied from another version.
-            </p>
-            <p className="mt-3">
-              Learn about <Link className="text-primary underline underline-offset-4" href="/features/moderation">Discord moderation</Link>, <Link className="text-primary underline underline-offset-4" href="/features/auto-roles">automatic role management</Link>, <Link className="text-primary underline underline-offset-4" href="/features/youtube-notifications">YouTube and social notifications</Link>, and <Link className="text-primary underline underline-offset-4" href="/features/ai-chat">AI auto chat</Link>. Before enabling any automation, check the permissions and explain its purpose to your members.
-            </p>
-          </section>
-          <section>
-            <h2 className="text-2xl font-semibold text-foreground">Where to get help</h2>
-            <p className="mt-3">
-              The <Link className="text-primary underline underline-offset-4" href="/faq">DexBotX FAQ</Link> covers common questions about pricing, open-source access, invitations, and configuration. If you need help beyond the published guidance, visit the support server linked in the site footer. For project details and source code, see the <Link className="text-primary underline underline-offset-4" href="/about">about DexBotX page</Link> and project GitHub repository.
+
+          <section aria-labelledby="dashboard-setup">
+            <h2 id="dashboard-setup" className="text-2xl font-semibold">Configure the bot</h2>
+            <p className="mt-3 leading-7 text-muted-foreground">
+              Welcome and goodbye messages are configured from the <Link className="text-primary underline underline-offset-4" href="/dashboard">DexBotX dashboard</Link>, not with slash commands. Sign in with Discord, choose a server you can manage, then select the message settings you want to update. Read the <Link className="text-primary underline underline-offset-4" href="/features/welcome-bot">welcome and goodbye guide</Link> for more detail.
             </p>
           </section>
         </article>

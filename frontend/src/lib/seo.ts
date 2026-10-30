@@ -2,72 +2,61 @@ import type { Metadata } from 'next';
 import { SITE } from '@/lib/site';
 
 export const HOME_SEO = {
-  title: 'DexBotX: Free Open Source Discord Bot for Your Server',
-  description:
-    'DexBotX Discord bot is free and open source, with welcome messages, moderation, auto roles, anti-spam, social alerts, and AI chat in one dashboard.',
-  keywords: [
-    'DexBotX',
-    'DexBotX Discord bot',
-    'Discord bot',
-    'free Discord bot',
-    'open source Discord bot',
-    'Discord moderation bot',
-    'Discord welcome bot',
-    'Discord auto role bot',
-    'Discord anti spam bot',
-    'Discord YouTube notification bot',
-    'Discord Kick notification bot',
-    'Discord AI chat bot',
-    'Discord bot with dashboard',
-    'all in one Discord bot',
-  ],
+  title: SITE.title,
+  description: SITE.description,
+  keywords: SITE.keywords,
 };
 
 export const FAQS = [
   {
-    question: 'What is DexBotX?',
+    question: 'Is DexBotX free to use?',
     answer:
-      'DexBotX is a public, all-in-one Discord bot with a web dashboard for configuring server automation, including welcome messages, moderation, auto roles, anti-spam, social notifications, and AI chat.',
-  },
-  {
-    question: 'Is DexBotX free?',
-    answer:
-      'Yes. DexBotX is free to invite and use. You can connect it to a Discord server and configure the available features without a subscription.',
+      'Yes. DexBotX is free to invite and use. There is no subscription required to add the bot to a server and use its available features.',
   },
   {
     question: 'Is DexBotX open source?',
     answer:
-      'Yes. DexBotX is an open-source project. Visit the project repository on GitHub to review its source and current project information.',
+      'Yes. DexBotX is open source. You can review the project source in the GitHub repository linked from the About page.',
   },
   {
-    question: 'How do I add DexBotX to my Discord server?',
+    question: 'Which Discord permissions does DexBotX need, and why?',
     answer:
-      'Use the Add to Discord link, choose a server where you have permission to add bots, review the requested permissions, and authorize. Then sign in to the dashboard to configure the server.',
+      'The Discord authorization screen shows the requested permissions before you approve an installation. DexBotX does not request Administrator. It uses permissions for its features, such as posting configured welcome messages and cards and running moderation commands. Moderation also checks the acting member’s permissions and Discord role hierarchy.',
   },
   {
-    question: 'How do I set up welcome messages?',
+    question: 'How do I add DexBotX to my server?',
     answer:
-      'Add DexBotX, sign in with Discord, select your server, and open the welcome settings in the dashboard. Choose a channel and customize the message and member card using the available controls and preview.',
+      'Use the Add to Discord link, choose a server where you can manage integrations, review the permissions in Discord, and authorize. Then sign in to the dashboard and select a server you can manage.',
   },
   {
-    question: 'Does DexBotX have AI chat?',
+    question: 'How do I remove DexBotX from my server?',
     answer:
-      'AI auto chat is one of the features in the DexBotX product. Check the dashboard and project documentation for current availability and configuration options for your server.',
+      'Remove or kick DexBotX from your server using Discord’s server member or Integrations settings. Removing the bot stops it from serving that server. See the privacy policy or contact the maintainer if you also want to request deletion of stored server configuration.',
   },
   {
-    question: 'Can DexBotX send YouTube and Kick notifications?',
+    question: 'What information does DexBotX store, and how is it protected?',
     answer:
-      'DexBotX is designed to provide social notifications, including YouTube and Kick updates. The dashboard is the place to review the currently available notification sources and configure them.',
+      'The service handles Discord account and server details needed for sign-in and dashboard configuration, along with saved settings and moderation audit records. Discord access tokens stay on the server and are encrypted before storage; the browser receives an HTTP-only session cookie. Read the privacy policy for details and data deletion requests.',
   },
   {
-    question: 'How do I configure DexBotX?',
+    question: 'Does DexBotX read ordinary Discord messages?',
     answer:
-      'Sign in to the web dashboard with Discord, choose a server you can manage, and use its settings pages to configure bot features. Routine welcome and goodbye setup is available through the dashboard rather than requiring command syntax.',
+      'No. The bot does not request Discord’s Message Content intent or read ordinary server message text. It does receive member events for join and leave features and slash-command interactions for moderation.',
   },
   {
-    question: 'Who made DexBotX?',
+    question: 'How do I configure welcome and goodbye messages?',
     answer:
-      'DexBotX is developed by dexgamex. You can find the project and its source through the GitHub link on this site, or ask questions in the support Discord server.',
+      'Add DexBotX, sign in with Discord, choose a server you can manage, and open its welcome or goodbye settings in the dashboard. Select a channel, customize the message and member card, preview it, and save.',
+  },
+  {
+    question: 'Which moderation commands are available?',
+    answer:
+      'DexBotX provides /kick, /ban, /unban, /timeout, and /untimeout. Each command requires the matching Discord permission and is also subject to the bot’s permissions and role hierarchy. See the Commands page for examples.',
+  },
+  {
+    question: 'Where can I get help or contact the maintainer?',
+    answer:
+      'Visit the DexBotX support Discord community for help. You can also contact the project maintainer through the GitHub repository linked on the About page.',
   },
 ] as const;
 
@@ -255,22 +244,28 @@ export const FEATURE_PAGES = [
 ] as const;
 
 export const PUBLIC_PAGE_SEO = {
+  features: {
+    title: 'DexBotX: Discord Bot Features and Easy Dashboard Setup',
+    description:
+      'Explore DexBotX: a free Discord bot with a simple web dashboard, moderation, AI chat, anti-spam, auto roles, welcome messages, and more for Discord communities.',
+    keywords: ['DexBotX features', 'Discord bot features', 'Discord bot dashboard'],
+  },
   about: {
     title: 'DexBotX: About the Free Open Source Discord Bot Project',
     description:
-      'DexBotX Discord bot is a free, open source project by dexgamex, bringing moderation, member onboarding, social alerts, and a web dashboard together.',
+      'Meet DexGameX, the developer behind DexBotX. Find its source, join Discord support, and learn about the free, open-source bot for your server.',
     keywords: ['about DexBotX', 'DexBotX developer', 'open source Discord bot'],
   },
   commands: {
-    title: 'DexBotX: Discord Bot Commands and Dashboard Setup Guide',
+    title: 'DexBotX: Discord Moderation Slash Commands and Examples',
     description:
-      'DexBotX Discord bot setup uses a web dashboard for welcome messages, moderation, roles, and automation, without requiring you to memorize commands.',
+      'See what /kick, /ban, /unban, /timeout, and /untimeout do, who can use them, and examples with the Discord permissions each command requires.',
     keywords: ['DexBotX commands', 'Discord bot dashboard', 'configure Discord bot'],
   },
   faq: {
     title: 'DexBotX: Discord Bot FAQ and Setup Help for Servers',
     description:
-      'DexBotX Discord bot FAQ answers questions about pricing, open source access, server setup, welcome messages, AI chat, and dashboard configuration.',
+      'Get clear answers about DexBotX pricing, permissions, removal, privacy, message access, setup, moderation commands, and support for server owners.',
     keywords: ['DexBotX FAQ', 'Discord bot help', 'DexBotX setup'],
   },
   privacy: {
@@ -304,7 +299,7 @@ export function createPageMetadata({
   return {
     title: { absolute: title },
     description,
-    keywords: [...HOME_SEO.keywords, ...keywords],
+    keywords: [...new Set([...HOME_SEO.keywords, ...keywords])],
     alternates: { canonical },
     openGraph: {
       type: 'website',
@@ -313,18 +308,13 @@ export function createPageMetadata({
       title,
       description,
       locale: 'en_US',
-      images: [{
-        url: '/opengraph-image',
-        width: 1200,
-        height: 630,
-        alt: 'DexBotX, free open source Discord bot',
-      }],
+      images: [{ ...SITE.socialImage, alt: 'DexBotX, free open source Discord bot' }],
     },
     twitter: {
       card: 'summary_large_image',
       title,
       description,
-      images: ['/opengraph-image'],
+      images: [SITE.socialImage.url],
     },
     robots: noindex
       ? { index: false, follow: false }
