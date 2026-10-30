@@ -44,11 +44,5 @@ regexes = [
 [[rules]]
 id = "redis-password-assignment"
 description = "Redis password assignment"
-regex = '''(?i)REDIS_PASSWORD\s*[:=]\s*["']?([^\s"'#]+)'''
+regex = '''(?i)REDIS_PASSWORD\s*[:=]\s*["']?([A-Za-z0-9][^\s"'#]{7,})'''
 secretGroup = 1
-[[rules.allowlists]]
-description = "Compose and README reference environment-variable placeholders and key generation"
-regexes = [
-    '''^\$\{REDIS_PASSWORD\}$''',
-    '''^\$\(openssl$''',
-]
