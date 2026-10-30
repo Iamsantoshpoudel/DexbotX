@@ -1,0 +1,164 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+      security-events: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - name: Analyze and upload results
+        uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          upload: true
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: never
+
+  npm-audit:
+    name: npm audit (${{ matrix.directory }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [backend, frontend]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/package-lock.json
+      - name: Audit production dependencies
+        working-directory: ${{ matrix.directory }}
+        run: npm audit --omit=dev --audit-level=high
+
+  gitleaks:
+    name: Gitleaks history scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Install Gitleaks
+        run: |
+          go install github.com/gitleaks/gitleaks/v8@v8.28.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Scan all Git history
+        run: gitleaks git --redact --config gitleaks.toml --log-opts="--all" .
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - name: Install Semgrep
+        run: python -m pip install --disable-pip-version-check semgrep==1.183.0
+      - name: Scan Next.js, React, TypeScript, and custom security rules
+        run: >-
+          semgrep scan --error
+          --config p/nextjs
+          --config p/react
+          --config p/typescript
+          --config p/security-audit
+          --config .semgrep.yml
+
+  environment-secrets:
+    name: Public environment and committed .env checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Reject public secrets and committed environment files
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
+            encoding: "utf8",
+          }).split("\0").filter(Boolean);
+
+          const committedEnvFiles = trackedFiles.filter((file) => {
+            const name = path.posix.basename(file);
+            return /^\.env(?:$|\.)/.test(name) && name !== ".env.example";
+          });
+
+          if (committedEnvFiles.length > 0) {
+            console.error("Committed environment files are not allowed:");
+            for (const file of committedEnvFiles) console.error(`  ${file}`);
+          }
+
+          const publicVariable = /(?:^|[\s{,])(?:export\s+)?(?:process\.env\.)?(NEXT_PUBLIC_[A-Z0-9_]+)\s*(?:=|:)\s*(['"]?)([^'"#\s,;}]+)\2/gm;
+          const secretName = /(?:SECRET|PRIVATE|PASSWORD|SERVICE[_-]?ROLE|DATABASE[_-]?URL|REDIS[_-]?URL|ACCESS[_-]?TOKEN|CLIENT[_-]?SECRET|AUTH[_-]?TOKEN|API[_-]?KEY)/i;
+          const secretValue = /^(?:sb_secret_[A-Za-z0-9_-]{16,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk_(?:live|test)_[A-Za-z0-9]{16,}|AKIA[A-Z0-9]{16})$|rediss?:\/\/(?:[^:/\s@]*):[^@\s/]+@|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i;
+          const publicSecrets = [];
+
+          for (const file of trackedFiles) {
+            if (file.split("/").some((part) => part === "node_modules" || part === ".git")) continue;
+            let contents;
+            try {
+              contents = fs.readFileSync(file, "utf8");
+            } catch (error) {
+              if (error.code === "EISDIR") continue;
+              throw error;
+            }
+            if (contents.includes("\0")) continue;
+
+            for (const match of contents.matchAll(publicVariable)) {
+              const [, name, , value] = match;
+              if (secretName.test(name) || secretValue.test(value)) {
+                publicSecrets.push(`${file}: ${name}`);
+              }
+            }
+          }
+
+          if (publicSecrets.length > 0) {
+            console.error("Potential secrets must not be exposed through NEXT_PUBLIC_*:");
+            for (const finding of publicSecrets) console.error(`  ${finding}`);
+          }
+
+          if (committedEnvFiles.length > 0 || publicSecrets.length > 0) process.exitCode = 1;
+          NODE

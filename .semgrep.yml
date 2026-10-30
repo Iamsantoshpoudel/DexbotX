@@ -1,0 +1,77 @@
+rules:
+  - id: request-url-used-in-fetch
+    message: Validate and constrain request-derived URLs before using them in fetch to prevent SSRF.
+    languages:
+      - javascript
+      - typescript
+    mode: taint
+    severity: ERROR
+    pattern-sources:
+      - pattern: $REQ.nextUrl.searchParams.get(...)
+      - pattern: $REQ.query.$PARAM
+      - pattern: $REQ.body.$PARAM
+      - pattern: (await $REQ.json()).$PARAM
+    pattern-sinks:
+      - pattern: fetch($URL, ...)
+
+  - id: request-data-in-supabase-raw-filter
+    message: Validate or construct Supabase raw filter expressions from trusted, typed values.
+    languages:
+      - javascript
+      - typescript
+    mode: taint
+    severity: ERROR
+    pattern-sources:
+      - pattern: $REQ.nextUrl.searchParams.get(...)
+      - pattern: $REQ.query.$PARAM
+      - pattern: $REQ.body.$PARAM
+      - pattern: (await $REQ.json()).$PARAM
+    pattern-sinks:
+      - pattern: $CLIENT.from(...).or($FILTER)
+
+  - id: request-data-in-redis-command
+    message: Do not pass request-derived data as a Redis command or Lua script; validate it and use fixed commands.
+    languages:
+      - javascript
+      - typescript
+    mode: taint
+    severity: ERROR
+    pattern-sources:
+      - pattern: $REQ.nextUrl.searchParams.get(...)
+      - pattern: $REQ.query.$PARAM
+      - pattern: $REQ.body.$PARAM
+      - pattern: (await $REQ.json()).$PARAM
+    pattern-sinks:
+      - pattern: $CLIENT.call($COMMAND, ...)
+      - pattern: $CLIENT.eval($SCRIPT, ...)
+
+  - id: next-api-json-body-without-schema-validation
+    message: Validate JSON request bodies with a schema before using their fields in an API route.
+    languages:
+      - javascript
+      - typescript
+    severity: WARNING
+    patterns:
+      - pattern-inside: |
+          export async function $METHOD(...) {
+            ...
+          }
+      - pattern: const $BODY = await $REQ.json()
+      - pattern-not-inside: |
+          ...
+          $SCHEMA.parse($BODY)
+          ...
+      - pattern-not-inside: |
+          ...
+          $SCHEMA.safeParse($BODY)
+          ...
+
+  - id: react-unsafe-html-injection
+    message: Sanitize untrusted values before rendering them with dangerouslySetInnerHTML.
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    patterns:
+      - pattern: "dangerouslySetInnerHTML={{ __html: $VALUE }}"
+      - pattern-not: "dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize($VALUE) }}"
