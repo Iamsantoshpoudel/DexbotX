@@ -5,12 +5,16 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+ARG BACKEND_URL
 ARG NEXT_PUBLIC_SITE_URL=https://dexbotx.vercel.app
+ENV BACKEND_URL=${BACKEND_URL}
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 RUN npm run build
 
 FROM node:22-bookworm-slim AS runtime
+ARG BACKEND_URL
 ENV NODE_ENV=production
+ENV BACKEND_URL=${BACKEND_URL}
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app

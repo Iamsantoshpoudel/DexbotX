@@ -74,6 +74,7 @@
   },
   "overrides": {
     "esbuild": "^0.25.12",
+    "multer": "^2.5.0",
     "sprintf-js": "^1.1.3"
   }
 }

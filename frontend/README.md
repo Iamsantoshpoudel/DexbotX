@@ -37,7 +37,7 @@ Values prefixed with `NEXT_PUBLIC_` are included in browser-visible output and m
 
 ## Deployment
 
-Deploy on any provider that supports the Next.js Node.js server or the included Dockerfile. Configure the project root as `frontend/` when deploying from the repository. Set `BACKEND_URL` to the backend's public HTTPS origin before building, and set the public metadata variables for your deployment.
+Deploy on any provider that supports the Next.js Node.js server or the included Dockerfile. Configure the project root as `frontend/` when deploying from the repository. Set `BACKEND_URL` to the backend's public HTTPS origin before building, and set the public metadata variables for your deployment. For Docker, pass it as a build argument, for example `docker build --build-arg BACKEND_URL=https://api.example.com -t dexbotx-frontend .` from `frontend/`; the image uses that value for both the baked API rewrite and the runtime API proxy.
 
 The API proxy keeps browser requests and the session cookie on the dashboard origin. Do not expose backend secrets in frontend environment variables. For Docker deployments, the image uses Next.js standalone output.
 
