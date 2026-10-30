@@ -67,6 +67,9 @@ describe('crypto', () => {
     const parts = enc.split('.');
     parts[3] = Buffer.from('tampered').toString('base64url');
     expect(() => decrypt(parts.join('.'), key)).toThrow();
+    parts[3] = enc.split('.')[3];
+    parts[2] = Buffer.from('short').toString('base64url');
+    expect(() => decrypt(parts.join('.'), key)).toThrow('Invalid ciphertext');
     expect(() => decrypt(enc, randomBytes(32))).toThrow();
   });
 });

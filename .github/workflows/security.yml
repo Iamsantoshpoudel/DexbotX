@@ -77,7 +77,7 @@ jobs:
           fetch-depth: 0
       - name: Install Gitleaks
         run: |
-          go install github.com/gitleaks/gitleaks/v8@v8.28.0
+          go install github.com/zricethezav/gitleaks/v8@v8.28.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Scan all Git history
         run: gitleaks git --redact --config gitleaks.toml --log-opts="--all" .

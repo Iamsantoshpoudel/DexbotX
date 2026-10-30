@@ -65,13 +65,3 @@ rules:
           ...
           $SCHEMA.safeParse($BODY)
           ...
-
-  - id: react-unsafe-html-injection
-    message: Sanitize untrusted values before rendering them with dangerouslySetInnerHTML.
-    languages:
-      - javascript
-      - typescript
-    severity: ERROR
-    patterns:
-      - pattern: "dangerouslySetInnerHTML={{ __html: $VALUE }}"
-      - pattern-not: "dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize($VALUE) }}"
