@@ -13,10 +13,38 @@ DexBotX is an open-source Discord bot and web dashboard for configuring welcome 
 ## Architecture
 
 ```text
-Browser → Next.js frontend → NestJS API → PostgreSQL
-                                  ↕          Redis
-Discord Gateway → bot process → job queue → worker → Discord API
+┌───────────┐   ┌──────────────────┐   ┌────────────────┐   ┌──────────────┐
+│  Browser  │[1]│ Next.js frontend │[2]│   NestJS API   │[3]│  PostgreSQL  │
+│ dashboard │──▶│  proxies /api/*  │──▶│   REST · WS    │◀─▶│   app data   │
+└─────┬─────┘   └──────────────────┘   └──┬───┬────────┬┘   └──────────────┘
+      ▲                                   ▲   ▲        ┊
+      └ authenticated /ws · live updates ─┘   ▼        ┊
+                                       ┌──────┴─────┐  ┊    ┌────────────────────┐
+                                       │   Redis    │  └┄┄┄▶│  Supabase Storage  │
+                                       │ sessions   │       │ custom backgrounds │
+                                       │ cache      │       └────────────────────┘
+                                       │ pub/sub    │
+                                       │ rate limits│
+                                       └──────┬─────┘
+                                              ▲  BullMQ keeps its jobs in Redis
+                                              ┊
+BOT & BACKGROUND FLOW                         ┊
+───────────────────────────────────────────── ▼─────────────────────────────────────────────
+┌─────────────────┐   ┌────────────┐   ┌──────┴───────┐   ┌──────────────┐   ┌─────────────┐
+│ Discord Gateway │[4]│ Bot shards │[5]│ BullMQ queue │[6]│ Queue worker │[7]│ Discord API │
+│  gateway events │──▶│ guild sync │──▶│ member jobs  │──▶│ renders msgs │──▶│     REST    │
+└─────────────────┘   └─────┬──────┘   └──────────────┘   └───────┬──────┘   └─────────────┘
+                            │                                     ▲
+                            ▼                                     │
+                      ┌───────────────────────────────────────────────────────┐
+                      │          PostgreSQL · same database as above          │
+                      │ bot writes sync + settings · worker reads latest data │
+                      └───────────────────────────────────────────────────────┘
 ```
+
+<div align="center">
+  <img src="./DexbotxArch.jpg" alt="Vipe Coded" width="750" />
+</div>
 
 The frontend proxies API requests through `/api/*`. The backend runs as three long-lived processes: the HTTP API, Discord bot, and queue worker. All backend processes share the same PostgreSQL database and Redis instance.
 
@@ -99,6 +127,7 @@ The backend also provides `npm run test:e2e`, `npm run db:generate`, and `npm ru
 Contributions and bug reports are welcome. Keep secrets out of commits, include tests for behavior changes, and run the relevant lint, typecheck, and test commands before opening a pull request.
 
 <h3> 🎉 Thank You for Checking Out the Project! If you enjoy this project, feel free to ⭐️ it and share it with others!</h3>
+
 
 <div align="center">
   <img src="./Coding.gif" alt="Vipe Coded" width="350" />
