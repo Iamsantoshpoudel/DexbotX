@@ -1437,7 +1437,7 @@ describe('Guild onboarding', () => {
     const channelEmbed = (channelMessage?.body.embeds as Array<{ description: string }>)[0];
     expect(channelEmbed.description).toContain('Hi <@777777777777777718>!');
     const dmEmbed = (dm?.body.embeds as Array<{ description: string }>)[0];
-    expect(dmEmbed.description).toContain('Hi! You (or someone in No Channel) just added DexBotX.');
+    expect(dmEmbed.description).toContain('Hi! You just added DexBotX on No Channel. 🎉');
     expect(dmEmbed.description).not.toContain('<@');
   });
 });
