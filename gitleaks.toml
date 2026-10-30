@@ -3,11 +3,22 @@ title = "DexbotX secret scanning"
 [extend]
 useDefault = true
 
+[allowlist]
+description = "Known non-secret Discord snowflake used only by tests"
+regexes = [
+    '''^123456789012345678$''',
+]
+
 [[rules]]
 id = "supabase-service-role-key"
 description = "Supabase service-role or secret key assignment"
 regex = '''(?i)(?:SUPABASE_(?:SERVICE_ROLE|SERVICE)_KEY|SUPABASE_SECRET_KEY)\s*[:=]\s*["']?([A-Za-z0-9._~+/=-]{20,})'''
 secretGroup = 1
+[[rules.allowlists]]
+description = "Synthetic service key used in the API test fixture"
+regexes = [
+    '''^service-key-service-key-123$''',
+]
 
 [[rules]]
 id = "supabase-anon-key-assignment"
@@ -24,9 +35,20 @@ regex = '''sb_secret_[A-Za-z0-9_-]{16,}'''
 id = "redis-url-password"
 description = "Redis connection URL containing a password"
 regex = '''(?i)rediss?://(?:[^:/\s@]*):[^@\s/]+@[^/\s]+'''
+[[rules.allowlists]]
+description = "Compose URL uses the required environment variable, not a stored password"
+regexes = [
+    '''^redis://:\$\{REDIS_PASSWORD\}@redis:6379$''',
+]
 
 [[rules]]
 id = "redis-password-assignment"
 description = "Redis password assignment"
 regex = '''(?i)REDIS_PASSWORD\s*[:=]\s*["']?([^\s"'#]+)'''
 secretGroup = 1
+[[rules.allowlists]]
+description = "Compose and README reference environment-variable placeholders and key generation"
+regexes = [
+    '''^\$\{REDIS_PASSWORD\}$''',
+    '''^\$\(openssl$''',
+]
