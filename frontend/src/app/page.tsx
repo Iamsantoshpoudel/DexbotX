@@ -72,6 +72,18 @@ const HOME_FAQS = FAQS.slice(0, 8);
 export default function Home() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'WebSite',
+            name: 'DexBotX Discord Bot',
+            alternateName: ['DexBotX', 'Dex Bot X'],
+            url: 'https://dexbotx.vercel.app/',
+          }),
+        }}
+      />
       <SiteStructuredData />
       <BreadcrumbStructuredData items={[{ name: 'Home', path: '/' }]} />
       <FaqStructuredData items={HOME_FAQS} />

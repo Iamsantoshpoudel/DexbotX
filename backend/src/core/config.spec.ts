@@ -3,7 +3,7 @@ import { loadConfig } from './config';
 const valid = {
   NODE_ENV: 'production',
   WEB_URL: 'https://dexbotx.vercel.app/',
-  WS_PUBLIC_URL: 'wss://dexbotx-zq8g.onrender.com/ws',
+  WS_PUBLIC_URL: 'wss://thedexbotx.onrender.com/ws',
   DATABASE_URL: 'postgres://u:p@db.example.com:5432/postgres',
   REDIS_URL: 'redis://localhost:6379',
   DISCORD_CLIENT_ID: '123456789012345678',
@@ -17,7 +17,7 @@ describe('loadConfig', () => {
     const c = loadConfig(valid as NodeJS.ProcessEnv);
     expect(c.webOrigin).toBe('https://dexbotx.vercel.app');
     expect(c.redirectUri).toBe('https://dexbotx.vercel.app/api/auth/callback');
-    expect(c.wsPublicUrl).toBe('wss://dexbotx-zq8g.onrender.com/ws');
+    expect(c.wsPublicUrl).toBe('wss://thedexbotx.onrender.com/ws');
     expect(c.cookieSecure).toBe(true);
     expect(c.databaseSsl).toBe(true);
     expect(c.shardCount).toBe(1);

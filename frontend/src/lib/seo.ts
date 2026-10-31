@@ -304,7 +304,7 @@ export function createPageMetadata({
     openGraph: {
       type: 'website',
       url: canonical,
-      siteName: SITE.brandName,
+      siteName: 'DexBotX Discord Bot',
       title,
       description,
       locale: 'en_US',

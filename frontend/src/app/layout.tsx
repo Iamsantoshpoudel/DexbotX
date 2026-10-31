@@ -10,10 +10,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE.siteUrl),
-  title: { default: SITE.title, template: '%s' },
+  title: { default: 'DexBotX Discord Bot', template: '%s | DexBotX' },
   description: SITE.description,
   keywords: SITE.keywords,
-  applicationName: SITE.brandName,
+  applicationName: 'DexBotX Discord Bot',
   authors: [{ name: SITE.creator, url: SITE.githubUrl }],
   creator: SITE.creator,
   publisher: SITE.creator,
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     url: '/',
-    siteName: SITE.brandName,
+    siteName: 'DexBotX Discord Bot',
     title: SITE.title,
     description: SITE.description,
     locale: 'en_US',
@@ -52,7 +52,6 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
-  icons: { icon: '/icon.png', apple: '/apple-icon.png' },
   manifest: '/manifest.webmanifest',
   verification: {
     ...(process.env.GOOGLE_SITE_VERIFICATION
@@ -74,6 +73,9 @@ const isVercelDeployment = process.env.VERCEL === '1';
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <head>
+        <link rel="icon" href="/icon-v2.png" sizes="192x192" type="image/png" />
+      </head>
       <body suppressHydrationWarning className="min-h-dvh font-sans antialiased">
         <Providers>{children}</Providers>
         {isVercelDeployment && (
