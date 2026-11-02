@@ -1504,12 +1504,32 @@ describe('Bot → queue → worker', () => {
     await redis.hset('flags', { maintenance: 'false' });
   });
 
-  it('queues nothing when the feature is disabled, the member is a bot, permissions are missing or the channel is foreign', async () => {
+  it('queues nothing when the feature is disabled, permissions are missing or the channel is foreign', async () => {
     await handle('goodbye', fakeMember()); // goodbye is disabled by default
-    await handle('welcome', fakeMember({ bot: true }));
     await handle('welcome', fakeMember({ hasPerms: false }));
     await handle('welcome', fakeMember({ channelInCache: false }));
     expect(await totalJobs()).toBe(0);
+  });
+
+  it('queues welcome and goodbye messages for bot members', async () => {
+    const settings = botModule.get(SettingsCache);
+    const current = await settings.get(G1);
+    const welcome = messageConfigSchema.parse({ ...current.welcome, enabled: true, channelId: C1 });
+    const goodbye = messageConfigSchema.parse({ ...current.goodbye, enabled: true, channelId: C1 });
+    await app.get(DatabaseService).db.insert(guildSettings).values({ guildId: G1, welcome, goodbye }).onConflictDoUpdate({
+      target: guildSettings.guildId,
+      set: { welcome, goodbye },
+    });
+    await settings.invalidate(G1);
+
+    for (const kind of ['welcome', 'goodbye'] as const) {
+      await handle(kind, fakeMember({ bot: true, userId: kind === 'welcome' ? '888222888222888222' : '888444888444888444' }));
+    }
+
+    const jobs = await queue().getJobs(['waiting']);
+    const botJobs = jobs.filter((job) => job.data.user.id === '888222888222888222' || job.data.user.id === '888444888444888444');
+    expect(botJobs.map((job) => job.data.kind).sort()).toEqual(['goodbye', 'welcome']);
+    await Promise.all(botJobs.map((job) => job.remove()));
   });
 
   it('queues an event with missing channel permissions when the bot can manage roles', async () => {
