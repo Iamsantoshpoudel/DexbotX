@@ -1516,20 +1516,32 @@ describe('Bot → queue → worker', () => {
     const current = await settings.get(G1);
     const welcome = messageConfigSchema.parse({ ...current.welcome, enabled: true, channelId: C1 });
     const goodbye = messageConfigSchema.parse({ ...current.goodbye, enabled: true, channelId: C1 });
-    await app.get(DatabaseService).db.insert(guildSettings).values({ guildId: G1, welcome, goodbye }).onConflictDoUpdate({
-      target: guildSettings.guildId,
-      set: { welcome, goodbye },
-    });
-    await settings.invalidate(G1);
+    const db = app.get(DatabaseService).db;
+    try {
+      await db.insert(guildSettings).values({ guildId: G1, welcome, goodbye }).onConflictDoUpdate({
+        target: guildSettings.guildId,
+        set: { welcome, goodbye },
+      });
+      await settings.invalidate(G1);
 
-    for (const kind of ['welcome', 'goodbye'] as const) {
-      await handle(kind, fakeMember({ bot: true, userId: kind === 'welcome' ? '888222888222888222' : '888444888444888444' }));
+      for (const kind of ['welcome', 'goodbye'] as const) {
+        await handle(kind, fakeMember({ bot: true, userId: kind === 'welcome' ? '888222888222888222' : '888444888444888444' }));
+      }
+
+      const jobs = await queue().getJobs(['waiting']);
+      const botJobs = jobs.filter((job) => job.data.user.id === '888222888222888222' || job.data.user.id === '888444888444888444');
+      expect(botJobs.map((job) => job.data.kind).sort()).toEqual(['goodbye', 'welcome']);
+    } finally {
+      const botJobs = (await queue().getJobs(['waiting'])).filter((job) =>
+        job.data.user.id === '888222888222888222' || job.data.user.id === '888444888444888444',
+      );
+      await Promise.all(botJobs.map((job) => job.remove()));
+      await db.insert(guildSettings).values({ guildId: G1, welcome: current.welcome, goodbye: current.goodbye }).onConflictDoUpdate({
+        target: guildSettings.guildId,
+        set: { welcome: current.welcome, goodbye: current.goodbye },
+      });
+      await settings.invalidate(G1);
     }
-
-    const jobs = await queue().getJobs(['waiting']);
-    const botJobs = jobs.filter((job) => job.data.user.id === '888222888222888222' || job.data.user.id === '888444888444888444');
-    expect(botJobs.map((job) => job.data.kind).sort()).toEqual(['goodbye', 'welcome']);
-    await Promise.all(botJobs.map((job) => job.remove()));
   });
 
   it('queues an event with missing channel permissions when the bot can manage roles', async () => {
