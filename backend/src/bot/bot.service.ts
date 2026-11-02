@@ -193,7 +193,6 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   }
 
   private async handleMember(kind: MessageKind, member: GuildMember | PartialGuildMember): Promise<void> {
-    if (member.user.bot) return;
     const flags = await this.featureFlags.get();
     if (flags.maintenance) return;
     const guild = member.guild;

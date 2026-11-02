@@ -4,7 +4,7 @@ import type { BuiltMessage } from '../render/message-builder.service';
 import { StatsService } from '../admin/stats.service';
 import { RedisService } from '../redis/redis.service';
 
-const API = 'https://discord.com/api/v10';
+const API = new URL('https://discord.com/api/v10/');
 const USER_AGENT = 'DiscordBot (https://dexbotx.app, 1.0.0)';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -89,8 +89,16 @@ export class DiscordRestService {
   ) {}
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
+    if (!path.startsWith('/') || path.startsWith('//')) {
+      throw new Error('Invalid Discord API path');
+    }
+    const url = new URL(path.slice(1), API);
+    if (url.origin !== API.origin || !url.pathname.startsWith(API.pathname)) {
+      throw new Error('Invalid Discord API path');
+    }
+
     await this.stats.recordDiscordRestCall((init.method ?? 'GET').toUpperCase(), normalizeRoute(path));
-    const res = await fetch(`${API}${path}`, {
+    const res = await fetch(url, {
       ...init,
       headers: { 'User-Agent': USER_AGENT, ...(init.headers ?? {}) },
       signal: AbortSignal.timeout(10_000),
