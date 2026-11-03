@@ -12,6 +12,7 @@ interface Connection {
   socket: WebSocket | null;
   ticketRequest: AbortController | null;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
+  releaseTimer: ReturnType<typeof setTimeout> | null;
   hiddenTimer: ReturnType<typeof setTimeout> | null;
   onVisibilityChange: () => void;
 }
@@ -26,6 +27,7 @@ interface GuildEvent {
 const channelRevisions = new Map<string, number>();
 const pendingChannelRevisions = new Map<string, number>();
 const RECONNECT_DELAY_MS = 3000;
+const RELEASE_CLOSE_DELAY_MS = 5 * 60_000;
 const HIDDEN_CLOSE_DELAY_MS = 5 * 60_000;
 const statusListeners = new Set<() => void>();
 let status: RealtimeStatus = 'reconnecting';
@@ -51,6 +53,10 @@ function setStatus(next: RealtimeStatus): void {
 export function connect(guildId: string, dispatch: AppDispatch): () => void {
   if (activeConnection?.guildId === guildId && !activeConnection.stopped) {
     const connection = activeConnection;
+    if (connection.releaseTimer) {
+      clearTimeout(connection.releaseTimer);
+      connection.releaseTimer = null;
+    }
     connection.references += 1;
     return () => release(connection);
   }
@@ -65,6 +71,7 @@ export function connect(guildId: string, dispatch: AppDispatch): () => void {
     socket: null,
     ticketRequest: null,
     reconnectTimer: null,
+    releaseTimer: null,
     hiddenTimer: null,
     onVisibilityChange: () => {},
   };
@@ -79,7 +86,12 @@ export function connect(guildId: string, dispatch: AppDispatch): () => void {
 function release(connection: Connection): void {
   if (connection.stopped) return;
   connection.references -= 1;
-  if (connection.references === 0) stop(connection);
+  if (connection.references === 0) {
+    connection.releaseTimer = setTimeout(() => {
+      connection.releaseTimer = null;
+      if (connection.references === 0) stop(connection);
+    }, RELEASE_CLOSE_DELAY_MS);
+  }
 }
 
 function stop(connection: Connection): void {
@@ -87,6 +99,7 @@ function stop(connection: Connection): void {
   connection.stopped = true;
   document.removeEventListener('visibilitychange', connection.onVisibilityChange);
   if (connection.reconnectTimer) clearTimeout(connection.reconnectTimer);
+  if (connection.releaseTimer) clearTimeout(connection.releaseTimer);
   if (connection.hiddenTimer) clearTimeout(connection.hiddenTimer);
   connection.ticketRequest?.abort();
   connection.socket?.close(1000, 'Page closed');

@@ -18,7 +18,7 @@ export function DashboardTopBar({ guildId, guild, lastSyncedLabel, refreshing, c
     <header className="sticky top-0 z-30 h-14 border-b border-border bg-surface">
       <div className="flex h-full items-center gap-2 px-3 sm:px-5">
         {guildId && <MobileNav guild={guild} guildId={guildId} lastSyncedLabel={lastSyncedLabel} />}
-        <Link href="/dashboard" aria-label="DexBotX dashboard home" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Link href="/dashboard" aria-label="DexBotX dashboard home" className={`min-w-0 shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${guildId ? 'hidden sm:flex' : 'flex'}`}>
           <LogoMark className="size-8" />
           <span className="hidden text-sm font-semibold sm:inline">DexBotX</span>
         </Link>
