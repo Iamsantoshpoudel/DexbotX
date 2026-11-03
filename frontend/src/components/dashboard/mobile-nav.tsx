@@ -1,6 +1,7 @@
 'use client';
 
-import { Menu, X } from 'lucide-react';
+import { ArrowLeft, Menu, X } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -64,15 +65,27 @@ export function MobileNav({ guild, guildId, lastSyncedLabel }: { guild?: GuildDe
           aria-modal="true"
           aria-label="Server navigation"
           inert={!open}
-          className={`absolute inset-y-0 left-0 w-[min(20rem,calc(100vw-2.5rem))] overflow-y-auto border-r border-border bg-surface shadow-xl transition-transform motion-reduce:transition-none ${open ? 'translate-x-0' : '-translate-x-full'}`}
+          className={`absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-2.5rem))] flex-col overflow-hidden border-r border-border bg-surface shadow-xl transition-transform motion-reduce:transition-none ${open ? 'translate-x-0' : '-translate-x-full'}`}
         >
-          <div className="flex h-14 items-center justify-between border-b border-border px-3">
+          <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-3">
             <span className="text-sm font-semibold">Server navigation</span>
             <Button type="button" variant="ghost" size="icon" className="size-11" aria-label="Close server navigation" onClick={() => setOpen(false)}>
               <X aria-hidden="true" />
             </Button>
           </div>
-          <Sidebar guild={guild} guildId={guildId} pathname={pathname} lastSyncedLabel={lastSyncedLabel} onNavigate={() => setOpen(false)} />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <Sidebar guild={guild} guildId={guildId} pathname={pathname} lastSyncedLabel={lastSyncedLabel} onNavigate={() => setOpen(false)} />
+          </div>
+          <div className="shrink-0 border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+            <Link
+              href="/"
+              onClick={() => setOpen(false)}
+              className="flex min-h-12 items-center justify-center gap-2 rounded-lg border border-primary/50 bg-primary/15 px-4 text-sm font-semibold text-primary shadow-[0_0_20px_rgba(138,180,248,0.25)] transition-colors hover:bg-primary/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeft aria-hidden="true" />
+              Back to site
+            </Link>
+          </div>
         </div>
       </div>
     </>

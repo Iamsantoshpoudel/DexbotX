@@ -13,7 +13,6 @@ export function PublicHeaderActions() {
 
   const { data: me, isLoading, error } = useGetMeQuery(undefined, {
     skip: hasLoginHint !== true,
-    refetchOnMountOrArgChange: true,
   });
 
   useEffect(() => {

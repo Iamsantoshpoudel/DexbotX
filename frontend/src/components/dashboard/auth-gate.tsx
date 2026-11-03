@@ -10,9 +10,7 @@ import { useGetMeQuery } from '@/store/api';
 
 export function DashboardAuthGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data, error, isLoading, refetch } = useGetMeQuery(undefined, {
-    refetchOnMountOrArgChange: true,
-  });
+  const { data, error, isLoading, refetch } = useGetMeQuery();
   const status = errorStatus(error);
 
   useEffect(() => {

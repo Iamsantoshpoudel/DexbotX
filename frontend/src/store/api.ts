@@ -5,6 +5,7 @@ import {
   type FetchArgs,
   type FetchBaseQueryError,
 } from '@reduxjs/toolkit/query/react';
+import type { TypedUseQuerySubscriptionOptions } from '@reduxjs/toolkit/query/react';
 import { toast } from 'sonner';
 import { parseRetryAfter, rateLimitMessage } from '@/lib/rate-limit';
 import { setLoggedOutHintCookie } from '@/lib/utils';
@@ -53,10 +54,10 @@ export const api = createApi({
   refetchOnFocus: false,
   refetchOnReconnect: false,
   refetchOnMountOrArgChange: false,
+  keepUnusedDataFor: 3600,
   endpoints: (b) => ({
     getMe: b.query<Me, void>({
       query: () => '/auth/me',
-      keepUnusedDataFor: 0,
       providesTags: ['Auth'],
     }),
     logout: b.mutation<void, void>({
@@ -81,7 +82,6 @@ export const api = createApi({
     getChannels: b.query<Channel[], string>({
       query: (guildId) => `/guilds/${guildId}/channels`,
       transformResponse: (r: { channels: Channel[] }) => r.channels,
-      keepUnusedDataFor: 60,
       providesTags: (_r, _e, guildId) => [{ type: 'Channels', id: guildId }],
     }),
     getRoles: b.query<GuildRole[], string>({
@@ -101,7 +101,6 @@ export const api = createApi({
     getPresets: b.query<Preset[], void>({
       query: () => '/presets',
       transformResponse: (r: { presets: Preset[] }) => r.presets,
-      keepUnusedDataFor: 86400,
     }),
 
     saveMessage: b.mutation<SavedMessage, { guildId: string; kind: MessageKind; config: MessageConfig }>({
@@ -146,15 +145,39 @@ export const api = createApi({
   }),
 });
 
+const getMeQuery = api.endpoints.getMe.useQuery;
+const getGuildsQuery = api.endpoints.getGuilds.useQuery;
+const getGuildQuery = api.endpoints.getGuild.useQuery;
+const getChannelsQuery = api.endpoints.getChannels.useQuery;
+const getPresetsQuery = api.endpoints.getPresets.useQuery;
+
+type QueryOptions = Omit<TypedUseQuerySubscriptionOptions, 'refetchOnMountOrArgChange'>;
+
+// RTK Query applies mount freshness at the hook level, so keep endpoint policies centralized here.
+export function useGetMeQuery(arg?: void, options?: QueryOptions) {
+  return getMeQuery(arg, { ...options, refetchOnMountOrArgChange: 300 });
+}
+
+export function useGetGuildsQuery(arg?: void, options?: QueryOptions) {
+  return getGuildsQuery(arg, { ...options, refetchOnMountOrArgChange: false });
+}
+
+export function useGetGuildQuery(guildId: string, options?: QueryOptions) {
+  return getGuildQuery(guildId, { ...options, refetchOnMountOrArgChange: 60 });
+}
+
+export function useGetChannelsQuery(guildId: string, options?: QueryOptions) {
+  return getChannelsQuery(guildId, { ...options, refetchOnMountOrArgChange: false });
+}
+
+export function useGetPresetsQuery(arg?: void, options?: QueryOptions) {
+  return getPresetsQuery(arg, { ...options, refetchOnMountOrArgChange: 86400 });
+}
+
 export const {
-  useGetMeQuery,
   useLogoutMutation,
-  useGetGuildsQuery,
-  useGetGuildQuery,
-  useGetChannelsQuery,
   useGetRolesQuery,
   useRefreshGuildMutation,
-  useGetPresetsQuery,
   useSaveMessageMutation,
   useResetMessageMutation,
   useSendTestMutation,

@@ -12,9 +12,7 @@ import { setLoggedOutHintCookie } from '@/lib/utils';
 
 export function AdminGate({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data: user, error: authError, isLoading: checkingAuth, refetch: refetchAuth } = useGetMeQuery(undefined, {
-    refetchOnMountOrArgChange: true,
-  });
+  const { data: user, error: authError, isLoading: checkingAuth, refetch: refetchAuth } = useGetMeQuery();
   const {
     data: admin,
     error: adminError,

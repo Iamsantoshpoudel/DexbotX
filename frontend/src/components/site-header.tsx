@@ -14,7 +14,6 @@ export function SiteHeader() {
   useEffect(() => setHasLoginHint(hasLoginHintCookie()), []);
   const { data: me, isLoading, error } = useGetMeQuery(undefined, {
     skip: !hasLoginHint,
-    refetchOnMountOrArgChange: true,
   });
 
   useEffect(() => {
