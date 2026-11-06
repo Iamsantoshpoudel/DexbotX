@@ -90,8 +90,10 @@ describe('API route proxy methods and redirects', () => {
 
   it('passes through the OAuth login redirect to Discord', async () => {
     const location = 'https://discord.com/oauth2/authorize?client_id=client&state=state';
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
-      new Response(null, { status: 302, headers: { location } }));
+    const fetchMock = vi.fn(async (...args: Parameters<typeof fetch>) => {
+      void args;
+      return new Response(null, { status: 302, headers: { location } });
+    });
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('BACKEND_URL', 'https://backend.example.com');
     vi.stubGlobal('fetch', fetchMock);
@@ -111,10 +113,13 @@ describe('API route proxy methods and redirects', () => {
   it('passes through the OAuth callback redirect to the dashboard with cookies', async () => {
     const location = 'https://dexbotx.vercel.app/?error=login_failed';
     const setCookie = 'dexbotx_oauth=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax';
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(null, {
-      status: 302,
-      headers: { location, 'set-cookie': setCookie },
-    }));
+    const fetchMock = vi.fn(async (...args: Parameters<typeof fetch>) => {
+      void args;
+      return new Response(null, {
+        status: 302,
+        headers: { location, 'set-cookie': setCookie },
+      });
+    });
     vi.stubEnv('NODE_ENV', 'development');
     vi.stubEnv('BACKEND_URL', 'https://backend.example.com');
     vi.stubGlobal('fetch', fetchMock);
