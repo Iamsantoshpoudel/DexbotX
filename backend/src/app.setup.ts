@@ -25,6 +25,9 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
   app.use(helmet());
   if (config.isProd) {
     app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.method === 'GET' && (req.path === '/health' || req.path === '/health/ready')) {
+        return next();
+      }
       if (!hasValidBackendProxySecret(req.get(BACKEND_PROXY_SECRET_HEADER), config.backendProxySecret)) {
         return res.status(403).json({ statusCode: 403, message: 'Forbidden' });
       }

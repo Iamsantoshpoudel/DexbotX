@@ -11,6 +11,16 @@ class ProbeController {
   health() {
     return { status: 'ok' };
   }
+
+  @Get('health/ready')
+  ready() {
+    return { status: 'ok' };
+  }
+
+  @Get('protected')
+  protected() {
+    return { status: 'ok' };
+  }
 }
 
 @Module({ controllers: [ProbeController] })
@@ -55,20 +65,27 @@ describe('configureApp production API guard', () => {
     await app?.close();
   });
 
-  it('rejects requests without the proxy secret', async () => {
-    await request(app.getHttpServer()).get('/health').expect(403);
+  it('allows Render health checks without the proxy secret', async () => {
+    await request(app.getHttpServer()).get('/health').expect(200, { status: 'ok' });
+    await request(app.getHttpServer()).get('/health/ready').expect(200, { status: 'ok' });
   });
 
-  it('rejects requests with an incorrect proxy secret', async () => {
+  it('rejects API requests without the proxy secret', async () => {
     await request(app.getHttpServer())
-      .get('/health')
+      .get('/protected')
+      .expect(403);
+  });
+
+  it('rejects API requests with an incorrect proxy secret', async () => {
+    await request(app.getHttpServer())
+      .get('/protected')
       .set('x-dexbotx-proxy-secret', 'wrong-secret')
       .expect(403);
   });
 
-  it('allows requests with the configured proxy secret', async () => {
+  it('allows API requests with the configured proxy secret', async () => {
     await request(app.getHttpServer())
-      .get('/health')
+      .get('/protected')
       .set('x-dexbotx-proxy-secret', secret)
       .expect(200, { status: 'ok' });
   });
