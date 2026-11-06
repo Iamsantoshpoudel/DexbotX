@@ -10,6 +10,7 @@ const valid = {
   DISCORD_CLIENT_SECRET: 'x'.repeat(32),
   DISCORD_BOT_TOKEN: 'y'.repeat(60),
   SESSION_ENCRYPTION_KEY: 'ab'.repeat(32),
+  BACKEND_PROXY_SECRET: 'z'.repeat(32),
 };
 
 describe('loadConfig', () => {
@@ -21,9 +22,20 @@ describe('loadConfig', () => {
     expect(c.cookieSecure).toBe(true);
     expect(c.databaseSsl).toBe(true);
     expect(c.shardCount).toBe(1);
-    expect(c.botPermissions).toBe('1099780443270');
+    expect(c.botPermissions).toBe('7049005315517686');
     expect(c.adminUserIds).toEqual([]);
     expect(c.sessionKey).toHaveLength(32);
+  });
+
+  it('uses the development bot permissions outside production', () => {
+    const c = loadConfig({
+      ...valid,
+      NODE_ENV: 'development',
+      WEB_URL: 'http://localhost:3000',
+      WS_PUBLIC_URL: 'ws://localhost:4000/ws',
+    } as NodeJS.ProcessEnv);
+    expect(c.botPermissions).toBe('1099780443270');
+    expect(c.backendProxySecret).toBe('z'.repeat(32));
   });
 
   it('parses configured admin Discord IDs', () => {
@@ -52,7 +64,9 @@ describe('loadConfig', () => {
 
   it('rejects insecure or localhost dashboard URLs in production', () => {
     expect(() => loadConfig({ ...valid, WEB_URL: 'http://dexbotx.vercel.app' } as NodeJS.ProcessEnv)).toThrow(/WEB_URL/);
+    expect(() => loadConfig({ ...valid, WEB_URL: 'https://other.example.com' } as NodeJS.ProcessEnv)).toThrow(/WEB_URL/);
     expect(() => loadConfig({ ...valid, WEB_URL: 'http://localhost:3000' } as NodeJS.ProcessEnv)).toThrow(/WEB_URL/);
     expect(() => loadConfig({ ...valid, WS_PUBLIC_URL: 'ws://dexbotx-zq8g.onrender.com/ws' } as NodeJS.ProcessEnv)).toThrow(/WS_PUBLIC_URL/);
+    expect(() => loadConfig({ ...valid, BACKEND_PROXY_SECRET: '' } as NodeJS.ProcessEnv)).toThrow(/BACKEND_PROXY_SECRET/);
   });
 });

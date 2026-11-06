@@ -21,6 +21,7 @@ Open `http://localhost:3000`. The development API proxy defaults to `http://loca
 | Variable | Purpose |
 |---|---|
 | `BACKEND_URL` | Backend HTTP(S) origin. Set explicitly for production; it is read at **build time** because the proxy rewrite is baked into the Next.js output. |
+| `BACKEND_PROXY_SECRET` | Shared random value (at least 32 characters) injected into server-side `/api/*` requests; set it to the same value as the backend. |
 | `NEXT_PUBLIC_WS_ORIGIN` | Public WebSocket origin allowed by the app's security policy. Set to the backend's `wss://` origin in production; if omitted, it is derived from `BACKEND_URL`. |
 | `NEXT_PUBLIC_SITE_URL` | Public website URL used for canonical and social metadata. |
 | `NEXT_PUBLIC_GITHUB_URL` | Public GitHub link used by the site. |
@@ -37,7 +38,7 @@ Values prefixed with `NEXT_PUBLIC_` are included in browser-visible output and m
 
 ## Deployment
 
-Deploy on any provider that supports the Next.js Node.js server or the included Dockerfile. Configure the project root as `frontend/` when deploying from the repository. Set `BACKEND_URL` to the backend's public HTTPS origin before building, and set the public metadata variables for your deployment. For Docker, pass it as a build argument, for example `docker build --build-arg BACKEND_URL=https://api.example.com -t dexbotx-frontend .` from `frontend/`; the image uses that value for both the baked API rewrite and the runtime API proxy.
+Deploy on any provider that supports the Next.js Node.js server or the included Dockerfile. Configure the project root as `frontend/` when deploying from the repository. Set `BACKEND_URL` to the backend's public HTTPS origin before building, set `NEXT_PUBLIC_SITE_URL=https://dexbotx.vercel.app`, and set the public metadata variables for your deployment. Set `BACKEND_PROXY_SECRET` as a server-only runtime variable on the frontend and to the exact same value on the backend; generate at least 32 random characters and never use a `NEXT_PUBLIC_*` variable for it. For Docker, pass `BACKEND_URL` as a build argument, for example `docker build --build-arg BACKEND_URL=https://api.example.com -t dexbotx-frontend .` from `frontend/`, and provide `BACKEND_PROXY_SECRET` at runtime; the image uses `BACKEND_URL` for the baked API rewrite and runtime API proxy.
 
 The API proxy keeps browser requests and the session cookie on the dashboard origin. Do not expose backend secrets in frontend environment variables. For Docker deployments, the image uses Next.js standalone output.
 

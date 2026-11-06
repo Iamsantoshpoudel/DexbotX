@@ -20,12 +20,31 @@ describe('GuildEventsService', () => {
 
     expect(redis.subscribe).toHaveBeenCalledTimes(5);
 
-    const eventPromise = firstValueFrom(service.stream().pipe(filter((event) => event.type === 'channels_changed'), take(1)));
+    const eventPromise = firstValueFrom(service.stream(new Set(['guild-123'])).pipe(filter((event) => event.type === 'channels_changed'), take(1)));
     handlers.get(GUILD_CHANNELS_CHANGED_CHANNEL)?.(GUILD_CHANNELS_CHANGED_CHANNEL, 'guild-123');
     await expect(eventPromise).resolves.toEqual({ type: 'channels_changed', data: { guildId: 'guild-123' } });
 
-    const syncPromise = firstValueFrom(service.stream().pipe(filter((event) => event.type === 'guild_synced'), take(1)));
+    const syncPromise = firstValueFrom(service.stream(new Set(['guild-123'])).pipe(filter((event) => event.type === 'guild_synced'), take(1)));
     handlers.get(GUILD_SYNCED_CHANNEL)?.(GUILD_SYNCED_CHANNEL, 'guild-123');
     await expect(syncPromise).resolves.toEqual({ type: 'guild_synced', data: { guildId: 'guild-123' } });
+  });
+
+  it('only relays events for guilds authorized for the subscriber', async () => {
+    const handlers = new Map<string, (channel: string, message: string) => void>();
+    const redis = {
+      subscribe: jest.fn(async (channel: string, handler: (channel: string, message: string) => void) => {
+        handlers.set(channel, handler);
+      }),
+    } as unknown as RedisService;
+    const service = new GuildEventsService(redis);
+    await service.onModuleInit();
+
+    const received: string[] = [];
+    const subscription = service.stream(new Set(['allowed-guild'])).subscribe((event) => received.push(JSON.stringify(event)));
+    handlers.get(GUILD_CHANNELS_CHANGED_CHANNEL)?.(GUILD_CHANNELS_CHANGED_CHANNEL, 'other-guild');
+    handlers.get(GUILD_CHANNELS_CHANGED_CHANNEL)?.(GUILD_CHANNELS_CHANGED_CHANNEL, 'allowed-guild');
+    subscription.unsubscribe();
+
+    expect(received).toEqual([JSON.stringify({ type: 'channels_changed', data: { guildId: 'allowed-guild' } })]);
   });
 });

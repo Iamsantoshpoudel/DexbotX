@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readChannelsCache, readGuildsCache, writeChannelsCache, writeGuildsCache } from './server-cache';
+import {
+  readChannelsCache,
+  readGuildsCache,
+  writeChannelsCache,
+  writeGuildsCache,
+} from './server-cache';
 
 const entries = new Map<string, string>();
 const storage = {
@@ -11,6 +16,7 @@ const storage = {
 afterEach(() => {
   entries.clear();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('server metadata cache', () => {

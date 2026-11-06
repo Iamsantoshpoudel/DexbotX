@@ -9,7 +9,7 @@ interface CacheEntry<T> {
   data: T;
 }
 
-function readCache<T>(key: string, isData: (value: unknown) => value is T): T | null {
+function readCache<T>(key: string, isData: (value: unknown) => value is T, maxAgeMs = MAX_AGE_MS): T | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
@@ -19,7 +19,7 @@ function readCache<T>(key: string, isData: (value: unknown) => value is T): T | 
     if (
       entry.version !== CACHE_VERSION ||
       typeof entry.savedAt !== 'number' ||
-      Date.now() - entry.savedAt > MAX_AGE_MS ||
+      Date.now() - entry.savedAt > maxAgeMs ||
       !isData(entry.data)
     ) {
       localStorage.removeItem(key);

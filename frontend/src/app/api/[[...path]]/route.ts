@@ -4,6 +4,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: Promise<{ path?: string[] }> };
+const BACKEND_PROXY_SECRET_HEADER = 'x-dexbotx-proxy-secret';
 
 function getBackendUrl(): URL {
   const value = (process.env.BACKEND_URL ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:4000' : '')).trim();
@@ -35,6 +36,15 @@ async function proxyRequest(request: NextRequest, { params }: RouteContext): Pro
   headers.delete('content-length');
   headers.delete('accept-encoding');
   headers.delete('transfer-encoding');
+  if (process.env.NODE_ENV === 'production') {
+    const secret = process.env.BACKEND_PROXY_SECRET;
+    if (!secret || secret.length < 32) {
+      return Response.json({ statusCode: 500, message: 'API proxy is not configured' }, { status: 500 });
+    }
+    headers.set(BACKEND_PROXY_SECRET_HEADER, secret);
+  } else {
+    headers.delete(BACKEND_PROXY_SECRET_HEADER);
+  }
 
   const method = request.method.toUpperCase();
   const response = await fetch(target, {

@@ -87,6 +87,48 @@ body {
   animation: fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
+@keyframes gentle-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.home-float {
+  animation: gentle-float 6s ease-in-out infinite;
+}
+
+@keyframes community-marquee-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.community-marquee-track {
+  animation: community-marquee-scroll 32s linear infinite;
+}
+
+.community-marquee-wrapper:hover .community-marquee-track,
+.community-marquee-wrapper:focus-within .community-marquee-track {
+  animation-play-state: paused;
+}
+
+.mascot-cap-float {
+  animation: mascot-cap-float 6s ease-in-out infinite;
+}
+
+@keyframes mascot-cap-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
 @keyframes admin-chart-draw {
   to {
     stroke-dashoffset: 0;
@@ -116,6 +158,16 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .fade-up {
+    animation: none;
+  }
+  .home-float,
+  .mascot-cap-float {
+    animation: none;
+  }
+  .community-marquee-wrapper {
+    overflow-x: auto;
+  }
+  .community-marquee-track {
     animation: none;
   }
   .admin-area-line,

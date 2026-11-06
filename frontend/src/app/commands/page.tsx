@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { PublicSiteHeader } from '@/components/public-site-header';
 import { PublicBreadcrumbs } from '@/components/seo/public-page';
 import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 
@@ -42,7 +41,6 @@ const COMMANDS = [
 export default function CommandsPage() {
   return (
     <>
-      <PublicSiteHeader />
       <main className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'Commands', path: '/commands' }]} />
         <article className="mt-8 space-y-8">

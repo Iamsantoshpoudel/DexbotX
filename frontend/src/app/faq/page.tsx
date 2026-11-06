@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { PublicSiteHeader } from '@/components/public-site-header';
 import { FaqStructuredData } from '@/components/seo/json-ld';
 import { PublicBreadcrumbs } from '@/components/seo/public-page';
 import { FAQS, PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
@@ -11,7 +10,6 @@ export default function FaqPage() {
   return (
     <>
       <FaqStructuredData items={FAQS} />
-      <PublicSiteHeader />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'FAQ', path: '/faq' }]} />
         <article className="mt-8">

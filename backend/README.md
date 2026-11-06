@@ -57,8 +57,9 @@ The complete variable list and local defaults are in [`.env.example`](./.env.exa
 | `DISCORD_CLIENT_SECRET` | Discord OAuth client secret. |
 | `DISCORD_BOT_TOKEN` | Discord bot token. |
 | `SESSION_ENCRYPTION_KEY` | 32-byte key encoded as 64 hexadecimal characters. |
+| `BACKEND_PROXY_SECRET` | Shared random value (at least 32 characters) required by the production API and injected by the frontend `/api/*` proxy. |
 
-For production, use HTTPS for the dashboard and `wss://` for `WS_PUBLIC_URL`. Register `<WEB_URL>/api/auth/callback` in the Discord application's OAuth2 redirect URLs. Keep secrets on backend processes; never add them to frontend or `NEXT_PUBLIC_*` variables.
+For production, set `WEB_URL=https://dexbotx.vercel.app`, use `wss://` for `WS_PUBLIC_URL`, and set the same `BACKEND_PROXY_SECRET` on both the backend and frontend server deployments. Production API requests without the matching secret are rejected. The bot invite uses permission value `7049005315517686` in production and `1099780443270` in development. Register `https://dexbotx.vercel.app/api/auth/callback` in the Discord application's OAuth2 redirect URLs. Keep backend secrets out of `NEXT_PUBLIC_*` variables.
 
 Useful optional settings include `ADMIN_USER_IDS` (admin access; empty disables it), `SENTRY_DSN`, `METRICS_TOKEN`, and `WORKER_CONCURRENCY`. `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` enable optional custom-background uploads through Supabase Storage; they are not required for other features.
 
@@ -81,7 +82,7 @@ Then use these production start commands:
 | Discord bot | `npm run start:bot` |
 | Queue worker | `npm run start:worker` |
 
-Configure the API health check to use `GET /health/ready` (checks PostgreSQL and Redis); `GET /health` is a liveness check. The API listens on `PORT`, defaulting to `4000`.
+Configure API health probes to use `GET /health/ready` (checks PostgreSQL and Redis) or `GET /health` (liveness) and send `x-dexbotx-proxy-secret` with the shared secret. The API listens on `PORT`, defaulting to `4000`.
 
 ## Development commands
 

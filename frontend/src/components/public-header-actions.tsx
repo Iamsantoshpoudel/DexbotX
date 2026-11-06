@@ -29,7 +29,7 @@ export function PublicHeaderActions() {
   if (me) {
     return (
       <div className="flex items-center gap-2">
-        <Link href="/dashboard" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+        <Link href="/dashboard" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'rounded-full text-white hover:bg-white/10')}>
           Dashboard
         </Link>
         <UserMenu me={me} />
@@ -38,7 +38,13 @@ export function PublicHeaderActions() {
   }
 
   return (
-    <a href="/api/auth/login?returnTo=/dashboard" className={cn(buttonVariants({ size: 'sm' }))}>
+    <a
+      href="/api/auth/login?returnTo=/dashboard"
+      className={cn(
+        buttonVariants({ size: 'sm' }),
+        'rounded-md bg-[#8ab4f8] px-4 text-[#172234] hover:bg-[#a8c7fa]',
+      )}
+    >
       Log in with Discord
     </a>
   );

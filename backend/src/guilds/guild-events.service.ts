@@ -1,5 +1,5 @@
 import { Injectable, MessageEvent, OnModuleInit } from '@nestjs/common';
-import { interval, map, merge, Observable, Subject } from 'rxjs';
+import { filter, interval, map, merge, Observable, Subject } from 'rxjs';
 import { RedisService } from '../redis/redis.service';
 import {
   GUILD_CHANNELS_CHANGED_CHANNEL,
@@ -38,8 +38,21 @@ export class GuildEventsService implements OnModuleInit {
     ]);
   }
 
-  stream(): Observable<MessageEvent> {
+  stream(allowedGuildIds: ReadonlySet<string>): Observable<MessageEvent> {
     const keepAlive = interval(25_000).pipe(map(() => ({ type: 'keepalive', data: {} })));
-    return merge(this.changes.asObservable(), keepAlive);
+    const authorizedChanges = this.changes.asObservable().pipe(
+      filter((event) => {
+        if (event.type === 'keepalive') return true;
+        const data: unknown = event.data;
+        return (
+          typeof data === 'object'
+          && data !== null
+          && 'guildId' in data
+          && typeof data.guildId === 'string'
+          && allowedGuildIds.has(data.guildId)
+        );
+      }),
+    );
+    return merge(authorizedChanges, keepAlive);
   }
 }

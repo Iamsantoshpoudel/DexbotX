@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
 export const APP_CONFIG = Symbol('APP_CONFIG');
+const PRODUCTION_WEB_ORIGIN = 'https://dexbotx.vercel.app';
+const PRODUCTION_BOT_PERMISSIONS = '7049005315517686';
+const DEVELOPMENT_BOT_PERMISSIONS = '1099780443270';
 
 const boolish = z.enum(['true', 'false']).transform((v) => v === 'true');
 
@@ -30,8 +33,8 @@ const envSchema = z.object({
     (value) => typeof value === 'string' ? value.split(',').map((id) => id.trim()).filter(Boolean) : value,
     z.array(z.string().regex(/^\d{17,20}$/)),
   ).default([]),
-  /** Invite permissions include moderation commands and per-channel permission repair; never Administrator. */
-  BOT_PERMISSIONS: z.string().regex(/^\d+$/).default('1099780443270'),
+  /** Shared only between the frontend server proxy and backend API. */
+  BACKEND_PROXY_SECRET: z.string().min(32).optional().or(z.literal('')),
   /** Number of Discord shards to launch. */
   SHARD_COUNT: z.coerce.number().int().min(1).default(1),
 
@@ -57,6 +60,13 @@ const envSchema = z.object({
   if (config.NODE_ENV !== 'production') return;
 
   const webUrl = new URL(config.WEB_URL);
+  if (webUrl.origin !== PRODUCTION_WEB_ORIGIN) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['WEB_URL'],
+      message: `must use ${PRODUCTION_WEB_ORIGIN} in production`,
+    });
+  }
   if (webUrl.protocol !== 'https:' || ['localhost', '127.0.0.1', '::1'].includes(webUrl.hostname)) {
     ctx.addIssue({
       code: 'custom',
@@ -66,6 +76,13 @@ const envSchema = z.object({
   }
   if (new URL(config.WS_PUBLIC_URL).protocol !== 'wss:') {
     ctx.addIssue({ code: 'custom', path: ['WS_PUBLIC_URL'], message: 'must use wss:// in production' });
+  }
+  if (!config.BACKEND_PROXY_SECRET) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['BACKEND_PROXY_SECRET'],
+      message: 'is required in production',
+    });
   }
 });
 
@@ -80,6 +97,7 @@ export interface AppConfig {
   inviteRedirectUri: string;
   cookieSecure: boolean;
   cookieDomain?: string;
+  backendProxySecret?: string;
   trustProxy: boolean | number | string;
   databaseUrl: string;
   databaseSsl: boolean;
@@ -130,6 +148,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     inviteRedirectUri: `${webOrigin}/api/bot/added`,
     cookieSecure: isProd || webOrigin.startsWith('https://'),
     cookieDomain: e.COOKIE_DOMAIN || undefined,
+    backendProxySecret: e.BACKEND_PROXY_SECRET || undefined,
     trustProxy: parseTrustProxy(e.TRUST_PROXY),
     databaseUrl: e.DATABASE_URL,
     databaseSsl: e.DATABASE_SSL ?? isProd,
@@ -140,7 +159,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     discordBotToken: e.DISCORD_BOT_TOKEN,
     discordSupportUrl: e.DISCORD_SUPPORT_URL || undefined,
     adminUserIds: e.ADMIN_USER_IDS,
-    botPermissions: e.BOT_PERMISSIONS,
+    botPermissions: isProd ? PRODUCTION_BOT_PERMISSIONS : DEVELOPMENT_BOT_PERMISSIONS,
     shardCount: e.SHARD_COUNT,
     sessionKey: Buffer.from(e.SESSION_ENCRYPTION_KEY, 'hex'),
     sessionTtlSeconds: e.SESSION_TTL_SECONDS,

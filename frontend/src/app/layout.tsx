@@ -5,6 +5,7 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { ReactNode } from 'react';
 import { Providers } from '@/components/providers';
+import { PublicSiteHeader } from '@/components/public-site-header';
 import { SITE } from '@/lib/site';
 import './globals.css';
 
@@ -77,7 +78,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="icon" href="/icon-v2.png" sizes="192x192" type="image/png" />
       </head>
       <body suppressHydrationWarning className="min-h-dvh font-sans antialiased">
-        <Providers>{children}</Providers>
+        <Providers>
+          <PublicSiteHeader />
+          {children}
+        </Providers>
         {isVercelDeployment && (
           <>
             <Analytics />

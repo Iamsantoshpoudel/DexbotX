@@ -1,16 +1,18 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { PublicSiteHeader } from '@/components/public-site-header';
 import { PublicBreadcrumbs } from '@/components/seo/public-page';
-import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
+import { FaqStructuredData } from '@/components/seo/json-ld';
+import { FAQS, PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 import { SITE } from '@/lib/site';
 
 export const metadata = createPageMetadata({ path: '/about', ...PUBLIC_PAGE_SEO.about });
 
+const ABOUT_FAQS = FAQS.slice(0, 8);
+
 export default function AboutPage() {
   return (
     <>
-      <PublicSiteHeader />
+      <FaqStructuredData items={ABOUT_FAQS} />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'About DexBotX', path: '/about' }]} />
         <article className="mt-8 space-y-8 leading-7 text-muted-foreground">
@@ -30,6 +32,24 @@ export default function AboutPage() {
             </p>
             <p className="mt-3">
               Explore the <Link className="text-primary underline underline-offset-4" href="/features">DexBotX feature list</Link>, check the <Link className="text-primary underline underline-offset-4" href="/commands">moderation command reference</Link>, or read the <Link className="text-primary underline underline-offset-4" href="/faq">frequently asked questions</Link>.
+            </p>
+          </section>
+
+          <section aria-labelledby="about-faq" className="scroll-mt-24">
+            <h2 id="about-faq" className="text-2xl font-semibold text-foreground">DexBotX Discord bot questions</h2>
+            <div className="mt-5 divide-y divide-border rounded-2xl border border-border bg-card/80">
+              {ABOUT_FAQS.map(({ question, answer }) => (
+                <details key={question} className="group px-5 py-4">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 rounded-md font-medium marker:hidden [&::-webkit-details-marker]:hidden">
+                    <span className="text-base font-medium text-foreground">{question}</span>
+                    <span aria-hidden="true" className="text-muted-foreground transition-transform group-open:rotate-45">+</span>
+                  </summary>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">{answer}</p>
+                </details>
+              ))}
+            </div>
+            <p className="mt-4 text-sm">
+              Find more answers on the <Link className="text-primary underline underline-offset-4" href="/faq">complete DexBotX FAQ page</Link>.
             </p>
           </section>
 

@@ -10,5 +10,5 @@ export default defineConfig([
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
-  globalIgnores(['.next/**', 'node_modules/**', 'out/**', 'build/**', 'next-env.d.ts']),
+  globalIgnores(['**/.next/**', 'node_modules/**', 'out/**', 'build/**', 'next-env.d.ts']),
 ]);

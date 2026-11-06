@@ -1,12 +1,30 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { Logo } from '@/components/logo';
 import { FEATURE_PAGES } from '@/lib/seo';
 import { SITE } from '@/lib/site';
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border/60 py-8">
-      <div className="mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 md:grid-cols-[1fr_2fr]">
+    <footer className="relative mt-[19rem] rounded-t-[2rem] border-t border-white/10 bg-background pb-12 pt-20 shadow-[0_-12px_50px_rgba(0,0,0,0.2)] sm:mt-[22rem] sm:pt-28 md:mt-[26rem]">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-28 rounded-t-[2rem]"
+        style={{ background: 'radial-gradient(ellipse 55% 100% at 50% 0%, rgb(88 101 242 / 0.12), transparent 100%)' }}
+      />
+      <div className=" pointer-events-none bg- absolute bottom-[calc(100%-3.25rem)] left-1/2 z-10 w-[min(24rem,94vw)] -translate-x-1/2 sm:bottom-[calc(100%-4.5rem)] sm:w-[28rem] md:w-[32rem]">
+        <Image
+          src="/assets/DiscordcharDexbotx.png"
+          alt="DexBotX mascot"
+          width={1022}
+          height={1195}
+          sizes="(max-width: 640px) 94vw, (max-width: 768px) 448px, 512px"
+          loading="eager"
+          className="block h-auto w-full"
+        />
+      </div>
+      <div className="relative z-10 mx-auto grid max-w-6xl gap-8 px-4 sm:px-6 md:grid-cols-[1fr_2fr]">
+        
         <div className="space-y-3">
           <Logo />
           <p className="max-w-sm text-sm text-muted-foreground">
@@ -49,7 +67,7 @@ export function SiteFooter() {
             </ul>
           </div>
         </nav>
-        <div className="border-t border-border pt-4 text-xs text-muted-foreground md:col-span-2">
+        <div className="border-t border-white/10 pt-4 text-xs text-white/55 md:col-span-2">
           Made by {SITE.creator}. Not affiliated with Discord Inc.
         </div>
       </div>

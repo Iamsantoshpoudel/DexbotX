@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { SiteFooter } from '@/components/site-footer';
-import { PublicSiteHeader } from '@/components/public-site-header';
 import { AddToDiscordButton, PublicBreadcrumbs } from '@/components/seo/public-page';
 import { PUBLIC_PAGE_SEO, createPageMetadata } from '@/lib/seo';
 
@@ -53,10 +52,24 @@ const CORE_FEATURES = [
   },
 ] as const;
 
+const PLANNED_FEATURES = [
+  {
+    name: 'Economy feature',
+    description: 'An economy feature is planned and is not available in the current release.',
+  },
+  {
+    name: '24/7 Music',
+    description: '24/7 music with custom playlists is planned and is not available in the current release.',
+  },
+  {
+    name: 'Custom bot profile',
+    description: 'Server owners will be able to upload a custom bot profile picture and banner and edit its description.',
+  },
+] as const;
+
 export default function FeaturesPage() {
   return (
     <>
-      <PublicSiteHeader />
       <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
         <PublicBreadcrumbs items={[{ name: 'Home', path: '/' }, { name: 'Features', path: '/features' }]} />
         <article className="mt-8 space-y-10">
@@ -103,8 +116,16 @@ export default function FeaturesPage() {
           <section aria-labelledby="roadmap">
             <h2 id="roadmap" className="text-2xl font-semibold">More features are coming</h2>
             <p className="mt-3 leading-7 text-muted-foreground">
-              The following ideas are planned and are not available in the current release: an economy feature, 24/7 music with custom playlists, and tools for server owners to upload a custom bot profile picture and banner and edit its description. Availability and timing may change; check the dashboard and project updates for release details.
+              These planned features are not available in the current release. Availability and timing may change; check the dashboard and project updates for release details.
             </p>
+            <ul className="mt-5 grid gap-5 sm:grid-cols-2">
+              {PLANNED_FEATURES.map(({ name, description }) => (
+                <li key={name} className="rounded-xl border border-border bg-card p-5">
+                  <h3 className="font-semibold">{name}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                </li>
+              ))}
+            </ul>
           </section>
 
           <nav aria-label="More DexBotX information" className="border-t border-border pt-6">

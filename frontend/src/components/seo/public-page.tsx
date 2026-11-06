@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { DiscordIcon } from '@/components/discord-icon';
 import { BreadcrumbStructuredData } from '@/components/seo/json-ld';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -33,6 +34,7 @@ export function PublicBreadcrumbs({ items }: { items: readonly BreadcrumbItem[] 
 export function AddToDiscordButton() {
   return (
     <a href="/api/invite" className={cn(buttonVariants({ size: 'lg' }))}>
+      <DiscordIcon className="size-5" />
       Add DexBotX to Discord
     </a>
   );

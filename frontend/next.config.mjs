@@ -35,7 +35,7 @@ const csp = [
   // Next.js injects inline bootstrap scripts; a nonce-based CSP would force every page to render dynamically.
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https://cdn.discordapp.com",
+  "img-src 'self' data: blob: https://cdn.discordapp.com https://media.discordapp.net",
   "font-src 'self' data:",
   `connect-src 'self' ${wsUrl.origin}${isDev ? ' ws:' : ''}`,
   "object-src 'none'",
@@ -67,6 +67,7 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'cdn.discordapp.com' },
+      { protocol: 'https', hostname: 'media.discordapp.net' },
     ],
   },
   async rewrites() {
@@ -75,7 +76,7 @@ const nextConfig = {
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
-      // Never let a CDN or browser cache API responses (they are per-user).
+      // Default to no-store for API responses (many are user-specific).
       { source: '/api/:path*', headers: [{ key: 'Cache-Control', value: 'no-store' }] },
       { source: '/api/presets', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, immutable' }] },
       { source: '/api/templates/presets', headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, immutable' }] },
