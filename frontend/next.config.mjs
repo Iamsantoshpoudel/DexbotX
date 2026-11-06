@@ -1,9 +1,9 @@
 /**
- * The browser only ever talks to THIS origin. /api/* is proxied to the NestJS backend, so:
+ * The browser only ever talks to THIS origin. The /api/* route handler proxies requests to the NestJS backend, so:
  *  - the session cookie is first-party (SameSite=Lax, httpOnly) and never exposed to other origins
  *  - there is no CORS surface to get wrong
  *  - the backend can stay on a private network
- * BACKEND_URL is read at BUILD time (rewrites are baked into the standalone output).
+ * BACKEND_URL is required at production build time and by the route handler at runtime.
  */
 const isDev = process.env.NODE_ENV !== 'production';
 const configuredBackendUrl = (process.env.BACKEND_URL ?? (isDev ? 'http://localhost:4000' : '')).trim();
@@ -69,9 +69,6 @@ const nextConfig = {
       { protocol: 'https', hostname: 'cdn.discordapp.com' },
       { protocol: 'https', hostname: 'media.discordapp.net' },
     ],
-  },
-  async rewrites() {
-    return [{ source: '/api/:path*', destination: `${BACKEND_URL}/:path*` }];
   },
   async headers() {
     return [
