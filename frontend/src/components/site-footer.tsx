@@ -14,7 +14,7 @@ export function SiteFooter() {
       />
       <div className=" pointer-events-none bg- absolute bottom-[calc(100%-3.25rem)] left-1/2 z-10 w-[min(24rem,94vw)] -translate-x-1/2 sm:bottom-[calc(100%-4.5rem)] sm:w-[28rem] md:w-[32rem]">
         <Image
-          src="/assets/DiscordcharDexbotx.png"
+          src="/assets/DiscordCharDexbotx.png"
           alt="DexBotX mascot"
           width={1022}
           height={1195}
