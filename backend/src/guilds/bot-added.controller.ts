@@ -26,11 +26,14 @@ export class BotAddedController {
   ): Promise<void> {
     const web = this.config.webOrigin;
     const id = typeof guildId === 'string' ? guildId : '';
+    if (error === 'access_denied') {
+      return res.redirect(302, `${web}/?error=bot_invite_cancelled`);
+    }
     if (error || !/^\d{17,20}$/.test(id)) {
-      return res.redirect(302, `${web}/dashboard`);
+      return res.redirect(302, `${web}/?error=bot_invite_failed`);
     }
     if (!req.session) {
-      return res.redirect(302, `${web}/`);
+      return res.redirect(302, `${web}/?notice=bot_added_login_required`);
     }
     try {
       await this.guilds.forgetUserGuilds(req.session.userId);
