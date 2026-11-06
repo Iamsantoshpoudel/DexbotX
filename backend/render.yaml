@@ -10,7 +10,7 @@ envVarGroups:
       - key: WS_PUBLIC_URL
         value: wss://thedexbotx.onrender.com/ws
       - key: TRUST_PROXY
-        value: "1"
+        value: "2"
       - key: DATABASE_SSL
         value: "true"
       - key: DATABASE_POOL_MAX
@@ -54,6 +54,8 @@ services:
       - key: DISCORD_BOT_TOKEN
         sync: false
       - key: SESSION_ENCRYPTION_KEY
+        sync: false
+      - key: BACKEND_PROXY_SECRET
         sync: false
 
   - type: worker
