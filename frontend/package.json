@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "analyze": "node scripts/analyze.mjs",
+    "seo:check": "node scripts/seo-check.mjs",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

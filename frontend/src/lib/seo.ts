@@ -308,7 +308,7 @@ export function createPageMetadata({
       title,
       description,
       locale: 'en_US',
-      images: [{ ...SITE.socialImage, alt: 'DexBotX, free open source Discord bot' }],
+      images: [{ url: SITE.socialImage.url, alt: 'DexBotX, free open source Discord bot' }],
     },
     twitter: {
       card: 'summary_large_image',

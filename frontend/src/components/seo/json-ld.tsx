@@ -71,7 +71,7 @@ export function SiteStructuredData() {
             operatingSystem: 'Discord',
             url: SITE.siteUrl,
             description: SITE.description,
-            image: `${SITE.siteUrl}${SITE.socialImage.url}`,
+            image: SITE.socialImage.url,
             offers: { '@type': 'Offer', price: 0, priceCurrency: 'USD' },
             author: { '@id': personId },
             publisher: { '@id': organizationId },
