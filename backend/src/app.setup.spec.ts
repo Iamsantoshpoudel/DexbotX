@@ -1,29 +1,32 @@
-import { Controller, Get, Module } from '@nestjs/common';
+import { Controller, Get, Head, Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { loadConfig } from './core/config';
 import { configureApp, hasValidBackendProxySecret } from './app.setup';
 
-@Controller()
+@Controller('dexbotx')
 class ProbeController {
   @Get('health')
   health() {
     return { status: 'ok' };
   }
 
-  @Get('health/ready')
+  @Head('health')
   ready() {
     return { status: 'ok' };
   }
+}
 
+@Controller()
+class ProtectedProbeController {
   @Get('protected')
   protected() {
     return { status: 'ok' };
   }
 }
 
-@Module({ controllers: [ProbeController] })
+@Module({ controllers: [ProbeController, ProtectedProbeController] })
 class ProbeModule {}
 
 describe('hasValidBackendProxySecret', () => {
@@ -65,9 +68,9 @@ describe('configureApp production API guard', () => {
     await app?.close();
   });
 
-  it('allows Render health checks without the proxy secret', async () => {
-    await request(app.getHttpServer()).get('/health').expect(200, { status: 'ok' });
-    await request(app.getHttpServer()).get('/health/ready').expect(200, { status: 'ok' });
+  it('allows the public status route without the proxy secret', async () => {
+    await request(app.getHttpServer()).get('/dexbotx/health').expect(200, { status: 'ok' });
+    await request(app.getHttpServer()).head('/dexbotx/health').expect(200);
   });
 
   it('rejects API requests without the proxy secret', async () => {
@@ -92,14 +95,14 @@ describe('configureApp production API guard', () => {
 
   it('allows CORS only for the configured production origin', async () => {
     const allowed = await request(app.getHttpServer())
-      .get('/health')
+      .get('/dexbotx/health')
       .set('Origin', 'https://dexbotx.vercel.app')
       .set('x-dexbotx-proxy-secret', secret)
       .expect(200);
     expect(allowed.headers['access-control-allow-origin']).toBe('https://dexbotx.vercel.app');
 
     const disallowed = await request(app.getHttpServer())
-      .get('/health')
+      .get('/dexbotx/health')
       .set('Origin', 'https://attacker.example')
       .set('x-dexbotx-proxy-secret', secret)
       .expect(200);

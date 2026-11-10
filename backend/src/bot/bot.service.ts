@@ -166,7 +166,10 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
       status: 'online',
     });
     await this.writeHeartbeat();
-    this.heartbeatTimer = setInterval(() => void this.writeHeartbeat(), 15_000);
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = setInterval(() => {
+      if (this.client.isReady()) void this.writeHeartbeat();
+    }, 20_000);
     this.heartbeatTimer.unref();
     await this.syncAll([...ready.guilds.cache.values()]);
     this.syncTimer = setInterval(() => {
@@ -175,14 +178,19 @@ export class BotService implements OnApplicationBootstrap, OnApplicationShutdown
   }
 
   private writeHeartbeat(): Promise<void> {
+    if (!this.client.isReady()) return Promise.resolve();
     const shardId = this.client.shard?.ids[0] ?? 0;
-    return this.stats.heartbeat(`shard:${shardId}`, {
+    const heartbeat = {
       status: this.shardStatus,
       pingMs: this.client.ws.ping,
       guilds: this.client.guilds.cache.size,
       reconnects: this.reconnects,
       at: new Date().toISOString(),
-    });
+    };
+    return Promise.all([
+      this.stats.heartbeat('bot', { at: heartbeat.at }, 60),
+      this.stats.heartbeat(`shard:${shardId}`, heartbeat),
+    ]).then(() => undefined);
   }
 
   private async syncAll(guilds: Guild[]): Promise<void> {

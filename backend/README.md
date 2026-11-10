@@ -82,7 +82,7 @@ Then use these production start commands:
 | Discord bot | `npm run start:bot` |
 | Queue worker | `npm run start:worker` |
 
-Configure API health probes to use `GET /health/ready` (checks PostgreSQL and Redis) or `GET /health` (liveness) and send `x-dexbotx-proxy-secret` with the shared secret. The API listens on `PORT`, defaulting to `4000`.
+The public API status endpoint is `GET /dexbotx/health` (also supports `HEAD`). It checks PostgreSQL, Redis, bot and worker heartbeats, and the Discord rate-limit block; unhealthy dependencies produce HTTP 503. It is intentionally not suitable for Render's health check because Render may restart the service when a dependency is down. Leave Render's Health Check Path empty. The API listens on `PORT`, defaulting to `4000`.
 
 ## Development commands
 

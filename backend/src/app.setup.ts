@@ -25,7 +25,7 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
   app.use(helmet());
   if (config.isProd) {
     app.use((req: Request, res: Response, next: NextFunction) => {
-      if (req.method === 'GET' && (req.path === '/health' || req.path === '/health/ready')) {
+      if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/dexbotx/health') {
         return next();
       }
       if (!hasValidBackendProxySecret(req.get(BACKEND_PROXY_SECRET_HEADER), config.backendProxySecret)) {

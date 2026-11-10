@@ -39,6 +39,7 @@ import { GuildSyncService } from '../src/bot/guild-sync.service';
 import { findOnboardingChannel } from '../src/bot/bot.service';
 import { OnboardingService } from '../src/discord/onboarding.service';
 import { ModerationService } from '../src/bot/moderation.service';
+import { HealthController } from '../src/health/health.controller';
 
 const PG_PORT = 54329;
 const REDIS_PORT = 63799;
@@ -221,6 +222,29 @@ function cookieFrom(res: request.Response, name: string): string | undefined {
   return found?.split(';')[0];
 }
 
+function resetHealthCache(): void {
+  const controller = app.get(HealthController);
+  Reflect.set(controller, 'cached', undefined);
+  Reflect.set(controller, 'inFlight', undefined);
+}
+
+async function setHealthHeartbeats(): Promise<void> {
+  const redis = app.get(RedisService).client;
+  await redis.set('hb:bot', '{}', 'EX', 60);
+  await redis.set('hb:worker', '{}', 'EX', 60);
+  await redis.del('discord:blocked_until');
+}
+
+function expectHealthBody(body: Record<string, unknown>, expected: Record<string, boolean>): void {
+  expect(Object.keys(body).sort()).toEqual(['checkedAt', 'ok', 'services']);
+  const services = body.services as Record<string, unknown>;
+  expect(Object.keys(services).sort()).toEqual(['api', 'bot', 'database', 'discord', 'redis', 'worker']);
+  expect(Object.values(services).every((value) => typeof value === 'boolean')).toBe(true);
+  expect(services).toEqual(expected);
+  expect(body.ok).toBe(Object.values(expected).every(Boolean));
+  expect(body.checkedAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/));
+}
+
 function onboardingChannel(id: string, name: string, position: number, everyoneCanView = true) {
   return {
     id,
@@ -338,6 +362,8 @@ beforeAll(async () => {
     DATABASE_URL: url,
     DATABASE_SSL: 'false',
     REDIS_URL: process.env.DEXBOTX_E2E_REDIS_URL ?? `redis://127.0.0.1:${REDIS_PORT}`,
+    CACHE_REDIS_URL: process.env.DEXBOTX_E2E_REDIS_URL ?? `redis://127.0.0.1:${REDIS_PORT}`,
+    TRUST_PROXY: '1',
     DISCORD_CLIENT_ID: '123456789012345678',
     DISCORD_CLIENT_SECRET: 'secret-secret-secret',
     DISCORD_BOT_TOKEN: 'bot-token-bot-token-bot-token',
@@ -407,11 +433,172 @@ describe('DexBotX API', () => {
   const http = () => request(app.getHttpServer());
   const authed = () => ({ Cookie: sessionCookie, Origin: WEB });
 
-  it('reports readiness with a real database and Redis', async () => {
-    const res = await http().get('/health/ready').expect(200);
-    expect(res.body).toEqual({ status: 'ok', db: true, redis: true });
-    await http().get('/health').expect(200);
+  it('reports public status with the exact body shape and security headers', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const res = await http().get('/dexbotx/health').set('Origin', 'https://untrusted.example').expect(200);
+    expectHealthBody(res.body, {
+      api: true,
+      database: true,
+      redis: true,
+      bot: true,
+      worker: true,
+      discord: true,
+    });
+    expect(res.headers['cache-control']).toBe('no-store');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-robots-tag']).toBe('noindex');
+    await http().head('/dexbotx/health').expect(200);
     expect(await app.get(RedisService).connectedClients()).toBeGreaterThanOrEqual(2);
+  });
+
+  it('returns 503 when the database check fails', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const ping = jest.spyOn(app.get(DatabaseService), 'ping').mockRejectedValue(new Error('database unavailable'));
+    try {
+      const res = await http().get('/dexbotx/health').expect(503);
+      expectHealthBody(res.body, {
+        api: true,
+        database: false,
+        redis: true,
+        bot: true,
+        worker: true,
+        discord: true,
+      });
+    } finally {
+      ping.mockRestore();
+    }
+  });
+
+  it('returns 503 when the core Redis check fails', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const ping = jest.spyOn(app.get(RedisService).client, 'ping').mockRejectedValue(new Error('redis unavailable'));
+    try {
+      const res = await http().get('/dexbotx/health').expect(503);
+      expectHealthBody(res.body, {
+        api: true,
+        database: true,
+        redis: false,
+        bot: true,
+        worker: true,
+        discord: true,
+      });
+    } finally {
+      ping.mockRestore();
+    }
+  });
+
+  it('checks the optional cache Redis client', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const cacheClient = app.get(RedisService).cacheClient;
+    if (!cacheClient) throw new Error('cache Redis client was not configured for this test');
+    const ping = jest.spyOn(cacheClient, 'ping').mockRejectedValue(new Error('cache redis unavailable'));
+    try {
+      const res = await http().get('/dexbotx/health').expect(503);
+      expectHealthBody(res.body, {
+        api: true,
+        database: true,
+        redis: false,
+        bot: true,
+        worker: true,
+        discord: true,
+      });
+    } finally {
+      ping.mockRestore();
+    }
+  });
+
+  it('returns 503 when a bot or worker heartbeat is missing', async () => {
+    await setHealthHeartbeats();
+    const redis = app.get(RedisService).client;
+    await redis.del('hb:bot');
+    resetHealthCache();
+    const botDown = await http().get('/dexbotx/health').expect(503);
+    expectHealthBody(botDown.body, {
+      api: true,
+      database: true,
+      redis: true,
+      bot: false,
+      worker: true,
+      discord: true,
+    });
+
+    await redis.set('hb:bot', '{}', 'EX', 60);
+    await redis.del('hb:worker');
+    resetHealthCache();
+    const workerDown = await http().get('/dexbotx/health').expect(503);
+    expectHealthBody(workerDown.body, {
+      api: true,
+      database: true,
+      redis: true,
+      bot: true,
+      worker: false,
+      discord: true,
+    });
+  });
+
+  it('reports Discord as unhealthy while its rate-limit block is active', async () => {
+    await setHealthHeartbeats();
+    await app.get(RedisService).client.set('discord:blocked_until', String(Date.now() + 30_000), 'EX', 30);
+    resetHealthCache();
+    const res = await http().get('/dexbotx/health').expect(503);
+    expectHealthBody(res.body, {
+      api: true,
+      database: true,
+      redis: true,
+      bot: true,
+      worker: true,
+      discord: false,
+    });
+    await app.get(RedisService).client.del('discord:blocked_until');
+  });
+
+  it('reuses one set of checks for requests within the 10-second cache window', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const databasePing = jest.spyOn(app.get(DatabaseService), 'ping').mockImplementation(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 50)),
+    );
+    const redisService = app.get(RedisService);
+    const redisPing = jest.spyOn(redisService.client, 'ping');
+    if (!redisService.cacheClient) throw new Error('cache Redis client was not configured for this test');
+    const cachePing = jest.spyOn(redisService.cacheClient, 'ping');
+    try {
+      await Promise.all([
+        http().get('/dexbotx/health').expect(200),
+        http().get('/dexbotx/health').expect(200),
+      ]);
+      await http().get('/dexbotx/health').expect(200);
+      expect(databasePing).toHaveBeenCalledTimes(1);
+      expect(redisPing).toHaveBeenCalledTimes(1);
+      expect(cachePing).toHaveBeenCalledTimes(1);
+    } finally {
+      databasePing.mockRestore();
+      redisPing.mockRestore();
+      cachePing.mockRestore();
+    }
+  });
+
+  it('limits the public status route to 30 requests per minute per IP', async () => {
+    await setHealthHeartbeats();
+    resetHealthCache();
+    const firstIp = '203.0.113.91';
+    const secondIp = '203.0.113.92';
+    for (let i = 0; i < 30; i++) {
+      await http().get('/dexbotx/health').set('X-Forwarded-For', firstIp).expect(200);
+    }
+
+    for (let i = 0; i < 30; i++) {
+      await http().get('/dexbotx/health').set('X-Forwarded-For', secondIp).expect(200);
+    }
+
+    const firstLimited = await http().get('/dexbotx/health').set('X-Forwarded-For', firstIp).expect(429);
+    const secondLimited = await http().get('/dexbotx/health').set('X-Forwarded-For', secondIp).expect(429);
+    expect(Number(firstLimited.headers['retry-after'])).toBeGreaterThan(0);
+    expect(Number(secondLimited.headers['retry-after'])).toBeGreaterThan(0);
   });
 
   it('serves presets publicly with cache headers', async () => {
@@ -429,7 +616,7 @@ describe('DexBotX API', () => {
   });
 
   it('sets security headers', async () => {
-    const res = await http().get('/health');
+    const res = await http().get('/dexbotx/health');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-powered-by']).toBeUndefined();
   });

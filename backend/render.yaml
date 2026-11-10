@@ -38,7 +38,6 @@ services:
     buildCommand: npm ci --include=dev && npm run build && npm prune --omit=dev
     preDeployCommand: npm run db:migrate
     startCommand: npm run start
-    healthCheckPath: /health/ready
     envVars:
       - fromGroup: dexbotx-backend-shared
       - key: PORT

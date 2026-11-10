@@ -42,6 +42,8 @@ export class RequestGuard implements CanActivate {
     const req = http.getRequest<AuthedRequest>();
     const res = http.getResponse<Response>();
 
+    if ((req.method === 'GET' || req.method === 'HEAD') && req.path === '/dexbotx/health') return true;
+
     const sid = req.cookies?.[sessionCookieName(this.config)];
     if (typeof sid === 'string' && sid) {
       const session = await this.sessions.get(sid);

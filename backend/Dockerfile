@@ -3,7 +3,7 @@
 #   bot     : node dist/bot/manager.js       (gateway shards; only enqueues jobs)
 #   worker  : node dist/worker/worker.js     (renders cards and posts; scale horizontally)
 #   migrate : node dist/db/migrate.js        (one-shot, run once per deploy)
-# Non-API roles have no HTTP server, so docker-compose disables the healthcheck for them.
+# Non-API roles have no HTTP server and should not use this healthcheck.
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
@@ -26,6 +26,6 @@ COPY --chown=node:node package.json ./
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/health',{headers:{'x-dexbotx-proxy-secret':process.env.BACKEND_PROXY_SECRET||''}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/dexbotx/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "dist/main.js"]

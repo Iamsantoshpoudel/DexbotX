@@ -29,14 +29,14 @@ async function bootstrap() {
         active: counts.active ?? 0,
         waiting: counts.waiting ?? 0,
         at: new Date().toISOString(),
-      });
+      }, 60);
     } catch (error) {
       logger.error(`Worker heartbeat failed: ${(error as Error).message}`);
     }
   };
   const heartbeatTimer = setInterval(() => {
     void publishHeartbeat();
-  }, 15_000);
+  }, 20_000);
   heartbeatTimer.unref();
   void publishHeartbeat();
   const clearHeartbeat = () => clearInterval(heartbeatTimer);

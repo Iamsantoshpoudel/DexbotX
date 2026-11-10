@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { DELETE, GET, OPTIONS, PATCH, POST, PUT } from './route';
+import { DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT } from './route';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -8,8 +8,8 @@ afterEach(() => {
 });
 
 describe('API route proxy security header', () => {
-  const request = (headers?: HeadersInit) => new NextRequest('https://dexbotx.vercel.app/api/health', { headers });
-  const context = { params: Promise.resolve({ path: ['health'] }) };
+  const request = (headers?: HeadersInit) => new NextRequest('https://dexbotx.vercel.app/api/dexbotx/health', { headers });
+  const context = { params: Promise.resolve({ path: ['dexbotx', 'health'] }) };
 
   it('adds and overrides the backend secret in production', async () => {
     const secret = 's'.repeat(32);
@@ -61,6 +61,7 @@ describe('API route proxy security header', () => {
 describe('API route proxy methods and redirects', () => {
   const methods = [
     ['GET', GET],
+    ['HEAD', HEAD],
     ['POST', POST],
     ['PUT', PUT],
     ['PATCH', PATCH],
@@ -76,7 +77,7 @@ describe('API route proxy methods and redirects', () => {
     const path = ['method-check'];
     const request = new NextRequest('https://dexbotx.vercel.app/api/method-check', {
       method,
-      ...(method === 'GET' ? {} : { body: 'payload' }),
+      ...(method === 'GET' || method === 'HEAD' ? {} : { body: 'payload' }),
     });
 
     await handler(request, { params: Promise.resolve({ path }) });

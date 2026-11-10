@@ -9,6 +9,7 @@ export class RedisService implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
   private readonly role: string;
   readonly client: Redis;
+  readonly cacheClient?: Redis;
   private subscriber?: Redis;
   private readonly channelHandlers = new Map<string, Set<MessageHandler>>();
   private readonly patternHandlers = new Map<string, Set<MessageHandler>>();
@@ -16,6 +17,14 @@ export class RedisService implements OnApplicationShutdown {
   constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
     this.role = process.env.DEXBOTX_PROCESS_ROLE ?? (process.env.SHARD_ID ? `shard${process.env.SHARD_ID}` : 'api');
     this.client = this.connect(`${this.role}:main`, { maxRetriesPerRequest: this.role === 'worker' ? null : 3 });
+    if (this.config.cacheRedisUrl) {
+      this.cacheClient = new Redis(this.config.cacheRedisUrl, {
+        connectionName: `${this.role}:cache`,
+        maxRetriesPerRequest: 3,
+        retryStrategy: (times) => this.retryStrategy(times),
+      });
+      this.cacheClient.on('error', (err) => this.logger.error(`Redis error: ${err.message}`));
+    }
     const expectedConnections = this.role === 'worker' ? 4 : 2;
     this.logger.log(`Redis connections expected: ${expectedConnections} (${this.role})`);
   }
@@ -82,7 +91,7 @@ export class RedisService implements OnApplicationShutdown {
   }
 
   async onApplicationShutdown(): Promise<void> {
-    const clients = [this.client, this.subscriber].filter((client): client is Redis => Boolean(client));
+    const clients = [this.client, this.cacheClient, this.subscriber].filter((client): client is Redis => Boolean(client));
     const results = await Promise.allSettled(clients.map((client) => client.quit()));
     for (const result of results) {
       if (result.status === 'rejected') {
