@@ -636,7 +636,7 @@ describe('DexBotX API', () => {
     await http().get('/guilds').expect(401);
     await http().get(`/guilds/${G1}`).expect(401);
     const added = await http().get(`/bot/added?guild_id=${G1}`).expect(302);
-    expect(added.headers.location).toBe(`${WEB}/`);
+    expect(added.headers.location).toBe(`${WEB}/?notice=bot_added_login_required`);
   });
 
   it('completes the Discord OAuth flow with a bound, single-use state', async () => {
