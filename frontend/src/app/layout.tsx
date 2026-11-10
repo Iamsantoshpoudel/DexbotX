@@ -75,7 +75,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
-        <link rel="icon" href="/icon-v2.png" sizes="192x192" type="image/png" />
+        <link rel="icon" href="/dexbotx.png" sizes="192x192" type="image/png" />
       </head>
       <body suppressHydrationWarning className="min-h-dvh font-sans antialiased">
         <Providers>
