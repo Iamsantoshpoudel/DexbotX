@@ -34,6 +34,9 @@ export const SITE = {
     'DexBotX is a fast, reliable, free and open-source Discord bot with easy web dashboard setup for anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and auto moderation.',
   keywords: [
     'DexBotX',
+    'Dex bot for Discord',
+    'DexBot',
+    'DexBotX',
     'DexBot',
     'Dex bot for Discord',
     'Dexbot Discord bot',
@@ -66,8 +69,8 @@ export const SITE = {
   ...(youtubeProfileUrl ? { youtubeProfileUrl } : {}),
   profileUrls: [githubUrl, ...optionalProfileUrls],
   socialImage: {
-    url: '/dexbotx-banner-v1.gif',
-    width: 680,
-    height: 240,
+    url: '/assets/dexbotx-og-banner.jpg',
+    width: 1200,
+    height: 630,
   },
 } satisfies SiteConfig;
