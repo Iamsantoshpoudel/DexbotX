@@ -56,13 +56,17 @@ try {
     );
   }
 
-  await assertContentType(`${baseUrl}/og-banner`, 'TelegramBot (like TwitterBot)', 'image/jpeg');
+  await assertContentType(
+    `${baseUrl}/og-banner`,
+    'TelegramBot (like TwitterBot)',
+    'image/jpeg',
+  );
   await assertContentType(
     `${baseUrl}/og-banner`,
     'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
     'image/gif',
   );
-  await assertContentType(`${baseUrl}/og-banner`, 'curl/8.0', 'image/jpeg');
+  await assertContentType(`${baseUrl}/og-banner`, 'curl/8.0', 'image/gif');
 
   console.log(`SEO check passed for ${pageUrls.length} sitemap pages and all /og-banner user agents.`);
 } finally {
