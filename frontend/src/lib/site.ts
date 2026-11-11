@@ -12,12 +12,13 @@ interface SiteConfig {
   profileUrls: readonly string[];
   socialImage: {
     url: string;
+    width: number;
+    height: number;
   };
 }
 
 const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL ?? 'https://github.com/Iamsantoshpoudel';
 const youtubeProfileUrl = process.env.NEXT_PUBLIC_YOUTUBE_PROFILE_URL;
-const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dexbotx.vercel.app').origin;
 const optionalProfileUrls = [
   youtubeProfileUrl,
   process.env.NEXT_PUBLIC_X_PROFILE_URL,
@@ -56,7 +57,7 @@ export const SITE = {
   tagline:
     'Fast and reliable Discord automation, free and open source, with easy web dashboard setup for anti-spam, social notifications, AI auto chat, auto roles, welcome and goodbye, and auto moderation.',
   creator: 'DexGameX',
-  siteUrl,
+  siteUrl: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dexbotx.vercel.app').origin,
   githubUrl,
   discordSupportUrl:
     process.env.NEXT_PUBLIC_DISCORD_SUPPORT_URL
@@ -65,6 +66,8 @@ export const SITE = {
   ...(youtubeProfileUrl ? { youtubeProfileUrl } : {}),
   profileUrls: [githubUrl, ...optionalProfileUrls],
   socialImage: {
-    url: new URL('/og-banner', siteUrl).toString(),
+    url: '/dexbotx-banner-v1.gif',
+    width: 680,
+    height: 240,
   },
 } satisfies SiteConfig;
